@@ -11,6 +11,7 @@ DATABASE_PATH = PROJECT_ROOT / "storage" / "app.db"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
+from datapilot.persistence.session_repository import create_session
 from datapilot.ui.sidebar import render_sidebar
 
 
@@ -22,19 +23,43 @@ def render_home() -> None:
 
 def render_configuration() -> None:
     st.title("New Analytics")
-    source = st.radio("Data source", ("SQL", "CSV", "XLSX"))
-    model_mode = st.radio("Model mode", ("Local (Ollama)", "Cloud API"))
-    st.info(f"Selected source: {source} | Selected model mode: {model_mode}")
-    st.caption("Saving configuration and connecting data sources will be added next.")
+    with st.form("new_analytics_configuration"):
+        source_type = st.radio("Data source", ("SQL", "CSV", "XLSX"))
+        model_mode = st.radio("Model mode", ("Local (Ollama)", "Cloud API"))
+        submitted = st.form_submit_button("Create Analytics Session")
+
+    if not submitted:
+        return
+
+    configuration = {
+        "source_type": source_type.lower(),
+        "llm_type": "local" if model_mode == "Local (Ollama)" else "cloud",
+        "provider": "ollama" if model_mode == "Local (Ollama)" else None,
+        "source_configured": False,
+        "model_configured": False,
+    }
+    title = f"{source_type} Analytics"
+    try:
+        session_id = create_session(DATABASE_PATH, title, configuration)
+    except (OSError, ValueError) as error:
+        st.error(f"Could not create session: {error}")
+        return
+
+    st.session_state.active_session_id = session_id
+    st.session_state.session_config = configuration
+    st.session_state.page = "chat"
+    st.rerun()
 
 
 def render_chat() -> None:
-    session = st.session_state.get("session_config")
-    if session is None:
+    configuration = st.session_state.get("session_config")
+    if configuration is None:
         st.warning("No saved session configuration is available.")
         return
     st.title("Analytics Session")
-    st.info("Session restored. Chat and analysis execution will be added later.")
+    st.write(f"Data source: {configuration['source_type'].upper()}")
+    st.write(f"Model mode: {configuration['llm_type'].capitalize()}")
+    st.info("Session saved. Source and model connection settings will be added later.")
 
 
 def main() -> None:
