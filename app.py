@@ -1,23 +1,26 @@
-import streamlit as st
+import subprocess
+import sys
+from pathlib import Path
 
 
-st.set_page_config(page_title="DataPilot", page_icon="📊", layout="wide")
+def main() -> int:
+    app_path = Path(__file__).resolve().with_name("streamlit_app.py")
+    if not app_path.is_file():
+        raise FileNotFoundError(f"Streamlit application not found: {app_path}")
 
-with st.sidebar:
-    st.title("DataPilot")
-    if st.button("New Analytics", use_container_width=True):
-        st.session_state.page = "configuration"
+    command = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(app_path),
+        *sys.argv[1:],
+    ]
+    try:
+        return subprocess.run(command, check=False).returncode
+    except KeyboardInterrupt:
+        return 130
 
-if "page" not in st.session_state:
-    st.session_state.page = "home"
 
-if st.session_state.page == "home":
-    st.title("DataPilot")
-    st.subheader("Agentic Data Analytics Workbench")
-    st.write("Select New Analytics to configure a data source and an AI model.")
-else:
-    st.title("New Analytics")
-    source = st.radio("Data source", ("SQL", "CSV", "XLSX"))
-    model_mode = st.radio("Model mode", ("Local (Ollama)", "Cloud API"))
-    st.info(f"Selected source: {source} | Selected model mode: {model_mode}")
-    st.caption("Database connections, file uploads, and models will be added in later steps.")
+if __name__ == "__main__":
+    raise SystemExit(main())
