@@ -41,13 +41,27 @@ Ollama model discovery and `/api/show` metadata requests succeeded. The Qwen mod
 
 The live tests also exposed invalid SQL response field types and reversed Pandas aggregation mappings that fixture tests had not revealed. Structured local responses now have explicit schemas. The Pandas compiler schema restricts operation kinds, exact parameter structures, verified columns, aggregation names, and operation counts. The ordinary validators still revalidate responses before execution. These fixes were retested with the real Qwen model.
 
-No cloud model credentials, Tavily key, or PostgreSQL/MySQL test URLs were configured during the audit. Real cloud inference, native cloud search, Tavily documentation retrieval, and external database analytical workflows remain unverified. PostgreSQL and MySQL driver imports pass, and PostgreSQL/MySQL read-only transaction setup is implemented; its live behavior has not been established here.
+No cloud model credentials or PostgreSQL/MySQL test URLs were configured during the audit. Real cloud inference, native cloud search, and external database analytical workflows remain unverified. PostgreSQL and MySQL driver imports pass, and PostgreSQL/MySQL read-only transaction setup is implemented; its live behavior has not been established here.
+
+### Live Tavily verification
+
+The user subsequently supplied a Tavily credential, held only in the test process environment. The final targeted run reports **19 passed**, including five live checks: Tavily search, Tavily extraction of the SQLite SELECT reference (35,765 characters), DataPilot SQLite and Pandas documentation retrieval, and real `qwen3.5:4b` documentation assessment followed by confirmed search and retrieval. Credentials were neither saved nor committed. Other documentation topics and cloud-native search are not established by these checks.
+
+The subsequent full regression reports **134 passed, 15 skipped** with no external-service environment variables configured. Those skips are opt-in live checks, including the five documentation checks run successfully above. Ruff passes over all application and test Python files. An earlier sandbox-restricted regression could not complete its local-server checks and was stopped; the successful regression ran with the required permissions.
+
+Direct SQLite HTTPS fetching failed with certificate-expiry verification errors in this environment. DataPilot now falls back to Tavily extraction when direct fetching fails, without disabling certificate verification. Extraction requests use official-domain URLs, accept only the exact requested source URL, enforce response limits, and preserve context limits. Regression tests cover mismatched source URLs and oversized responses. The initial live failures were fixed and rerun; they are not counted as successful checks.
+
+To reproduce, set `TAVILY_API_KEY` in the process environment and optionally select `DATAPILOT_TEST_OLLAMA_MODEL`, then run:
+
+```powershell
+uv run --locked pytest tests/test_live_documentation.py tests/test_documentation.py -q -rA
+```
 
 ## Release assessment
 
 **Local release candidate: SQL, CSV, and XLSX workflows are verified with a real supported model, and offline application/security checks pass. Cloud and external database release readiness remain unverified.** This is not a claim that every provider, installed model, or deployment configuration is release-ready.
 
-The remaining external work is to configure explicit cloud test models and credentials, validate PostgreSQL/MySQL deployment behavior using read-only accounts, and configure `TAVILY_API_KEY` and/or a supported selected cloud provider to validate real documentation retrieval. No unresolved critical local blocker was observed in the tested Qwen configuration.
+The remaining external work is to configure explicit cloud test models and credentials, validate PostgreSQL/MySQL deployment behavior using read-only accounts, and verify native documentation search for supported selected cloud providers. Tavily-backed local-model retrieval is now verified for the cases above. No unresolved critical local blocker was observed in the tested Qwen configuration.
 
 Use the commands in the README. To reproduce the successful tested local configuration:
 

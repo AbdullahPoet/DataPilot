@@ -21,6 +21,7 @@ OFFICIAL_DOMAINS = {
     "bokeh": ("docs.bokeh.org",),
 }
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
+TAVILY_EXTRACT_ENDPOINT = "https://api.tavily.com/extract"
 
 
 class DocumentationRetrievalError(RuntimeError):
@@ -80,6 +81,31 @@ def _fetch_page(url: str, topic: str, timeout: float, max_bytes: int) -> str:
     return re.sub(r"\s+", " ", unescape(primary.get_text(" ", strip=True))).strip()
 
 
+def _extract_page(url: str, topic: str, api_key: str, timeout: float, max_bytes: int) -> str:
+    if not _trusted_url(url, topic):
+        raise DocumentationRetrievalError("Documentation URL is not trusted")
+    request = Request(
+        TAVILY_EXTRACT_ENDPOINT,
+        data=json.dumps({"urls": [url], "extract_depth": "basic", "format": "text"}).encode(),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout) as response:
+        body = response.read(max_bytes + 1)
+    if len(body) > max_bytes:
+        raise DocumentationRetrievalError("Extraction response exceeds size limit")
+    data = json.loads(body)
+    if not isinstance(data, dict) or not isinstance(data.get("results"), list):
+        raise DocumentationRetrievalError("Unexpected Tavily extraction response format")
+    for result in data["results"]:
+        if not isinstance(result, dict) or result.get("url") != url:
+            continue
+        content = result.get("raw_content")
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+    raise DocumentationRetrievalError("No matching official documentation was extracted")
+
+
 def retrieve_documentation(
     query: str,
     topic: str,
@@ -132,7 +158,10 @@ def retrieve_documentation(
             try:
                 content = _fetch_page(url, topic, timeout, max_page_bytes)
             except (HTTPError, URLError, TimeoutError, OSError, DocumentationRetrievalError):
-                continue
+                try:
+                    content = _extract_page(url, topic, api_key, timeout, max_page_bytes)
+                except (HTTPError, URLError, TimeoutError, OSError, ValueError, DocumentationRetrievalError):
+                    continue
             if not content:
                 continue
             sources.append(DocumentationSource(

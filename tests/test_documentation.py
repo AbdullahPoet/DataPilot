@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+from urllib.error import URLError
 
 import pytest
 
@@ -8,6 +10,66 @@ from datapilot.skills_engine.basic_knowledge_fallback import generate_sql_with_b
 from datapilot.tools import documentation_retriever, search_orchestrator
 from datapilot.tools.cloud_search import NativeSearchResult
 from datapilot.tools.documentation_retriever import DocumentationRetrievalError, _trusted_url
+
+
+@pytest.mark.parametrize("returned_url", ["https://sqlite.org/lang_select.html", "https://evil.test/"])
+def test_failed_direct_fetch_uses_matching_tavily_extraction(
+    monkeypatch: pytest.MonkeyPatch, returned_url: str
+) -> None:
+    url = "https://sqlite.org/lang_select.html"
+    monkeypatch.setenv("TAVILY_API_KEY", "test-key")
+
+    def unavailable(*args: object) -> str:
+        raise URLError("certificate verification failed")
+
+    monkeypatch.setattr(documentation_retriever, "_fetch_page", unavailable)
+    requests = []
+
+    def respond(request: object, **kwargs: object) -> object:
+        requests.append(request)
+        data = (
+            {"results": [{"url": url, "title": "SELECT"}]}
+            if request.full_url.endswith("/search")
+            else {"results": [{"url": returned_url, "raw_content": "GROUP BY syntax"}]}
+        )
+
+        class Response:
+            def __enter__(self) -> object:
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                pass
+
+            def read(self, size: int) -> bytes:
+                return json.dumps(data).encode()[:size]
+
+        return Response()
+
+    monkeypatch.setattr(documentation_retriever, "urlopen", respond)
+    sources = documentation_retriever.retrieve_documentation("GROUP BY", "sqlite")
+    assert len(requests) == 2
+    assert requests[1].get_header("Authorization") == "Bearer test-key"
+    assert json.loads(requests[1].data)["urls"] == [url]
+    if returned_url == url:
+        assert len(sources) == 1 and sources[0].content == "GROUP BY syntax"
+    else:
+        assert not sources
+
+
+def test_tavily_extraction_rejects_oversized_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Response:
+        def __enter__(self) -> object:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def read(self, size: int) -> bytes:
+            return b"x" * size
+
+    monkeypatch.setattr(documentation_retriever, "urlopen", lambda *args, **kwargs: Response())
+    with pytest.raises(DocumentationRetrievalError, match="size limit"):
+        documentation_retriever._extract_page("https://sqlite.org/docs", "sqlite", "test", 1, 10)
 
 
 @pytest.mark.parametrize(
