@@ -17,7 +17,16 @@ def render_sidebar(database_path: Path) -> None:
     initialize_sessions(database_path)
 
     with st.sidebar:
-        st.title("DataPilot")
+        st.html(
+            "<style>.st-key-navigation_brand img {"
+            "height: 80px; object-fit: cover; object-position: center;"
+            "}</style>"
+        )
+        with st.container(key="navigation_brand"):
+            st.image(
+                Path(__file__).parent / "assets" / "navigation_logo.png",
+                width="stretch",
+            )
         if st.button("New Analytics", width="stretch"):
             st.session_state.active_session_id = None
             st.session_state.session_config = None
