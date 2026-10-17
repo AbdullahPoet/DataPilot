@@ -42,6 +42,7 @@ def _create_readonly_engine(connection_url: str, timeout_seconds: float) -> Engi
 
         def connect_sqlite() -> sqlite3.Connection:
             connection = sqlite3.connect(uri, uri=True, timeout=timeout_seconds)
+            connection.execute("PRAGMA query_only=ON")
             deadline = time.monotonic() + timeout_seconds
             connection.set_progress_handler(
                 lambda: 1 if time.monotonic() >= deadline else 0, 1000
@@ -70,7 +71,7 @@ def execute_sql(
     timeout_seconds: float = 30.0,
     max_rows: int = 1000,
 ) -> SQLExecutionResult:
-    if not isinstance(timeout_seconds, (int, float)) or not 0 < timeout_seconds <= 3600:
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not 0 < timeout_seconds <= 3600:
         raise ValueError("timeout_seconds must be between 0 and 3600")
     if not isinstance(max_rows, int) or isinstance(max_rows, bool) or not 1 <= max_rows <= 100000:
         raise ValueError("max_rows must be between 1 and 100000")
@@ -104,8 +105,8 @@ def execute_sql(
                 )
                 connection.commit()
                 connection.exec_driver_sql("START TRANSACTION READ ONLY")
-            result = connection.execute(text(validated.sql))
-            columns = tuple(str(name) for name in result.keys())
+            result = connection.exec_driver_sql(validated.sql)
+            columns = tuple(map(str, result.keys()))
             fetched = result.fetchmany(max_rows + 1)
             rows = tuple(tuple(row) for row in fetched[:max_rows])
             connection.rollback()

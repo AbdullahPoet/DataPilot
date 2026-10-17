@@ -2,7 +2,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-
 COMMON_LEVELS = ("easy", "medium", "hard")
 MODEL_FAMILY_PATTERN = re.compile(r"[a-z][a-z0-9_-]*\Z")
 

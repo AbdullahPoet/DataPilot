@@ -5,7 +5,6 @@ from typing import Literal
 
 from datapilot.models.model_manager import ChatMessage, invoke_model
 
-
 SQLDialect = Literal["sqlite", "postgresql", "mysql"]
 SUPPORTED_DIALECTS = frozenset({"sqlite", "postgresql", "mysql"})
 

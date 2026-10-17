@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from datapilot.agents.sql_agent import SQLGenerationResult, SQLDialect, generate_sql
+from datapilot.agents.sql_agent import SQLDialect, SQLGenerationResult, generate_sql
 from datapilot.models.model_manager import ChatMessage, invoke_model
-
 
 KnowledgeStatus = Literal["ready", "needs_basic_knowledge", "unanswerable"]
 

@@ -1,6 +1,6 @@
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired
 
 import pandas as pd
 
@@ -132,6 +132,18 @@ def build_pandas_agent_workflow(
             state["source_id"],
             state["user_query"],
         )
+        if status == "pending":
+            from langgraph.types import interrupt
+
+            from datapilot.validation.approval_manager import decide_execution_approval
+
+            decision = interrupt({"query": state["user_query"], "operations": state["pandas_operations"]})
+            if not isinstance(decision, bool):
+                raise ValueError("Approval decision must be a boolean")
+            status = decide_execution_approval(
+                approval_database_path, state["session_id"], state["source_id"],
+                state["user_query"], decision,
+            )
         return {"approval_status": status}
 
     def route_approval(state: PandasWorkflowState) -> str:

@@ -2,7 +2,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from math import isfinite
 
-
 DEFAULT_CONTEXT_WINDOW = 35_000
 COMPACTION_THRESHOLD = 0.85
 
@@ -59,7 +58,7 @@ def assess_context(
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ValueError(f"{label} must be a nonnegative integer")
     if isinstance(threshold, bool) or not isinstance(threshold, (float, int)):
-        raise ValueError("Threshold must be a number between 0 and 1")
+        raise TypeError("Threshold must be a number between 0 and 1")
     if not isfinite(threshold) or not 0 < threshold < 1:
         raise ValueError("Threshold must be a number between 0 and 1")
     total = input_tokens + reserved_output_tokens

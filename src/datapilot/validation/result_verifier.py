@@ -1,6 +1,6 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol, Sequence
-
+from typing import Literal, Protocol
 
 Scalar = str | int | float | bool | None
 

@@ -10,7 +10,6 @@ from urllib.request import Request, urlopen
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-
 OFFICIAL_DOMAINS = {
     "sqlite": ("sqlite.org",),
     "postgresql": ("postgresql.org",),

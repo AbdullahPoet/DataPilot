@@ -6,7 +6,6 @@ import pandas as pd
 
 from datapilot.validation.pandas_validator import ValidatedPandasPlan
 
-
 OperationKind = Literal["filter", "select", "groupby", "sort", "limit"]
 
 

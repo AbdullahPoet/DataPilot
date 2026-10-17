@@ -2,7 +2,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from datapilot.agents.sql_agent import SQLDialect, SUPPORTED_DIALECTS
+from datapilot.agents.sql_agent import SUPPORTED_DIALECTS, SQLDialect
 from datapilot.models.model_manager import ChatMessage, invoke_model
 
 

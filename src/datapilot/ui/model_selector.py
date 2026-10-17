@@ -7,7 +7,6 @@ from urllib.request import urlopen
 import streamlit as st
 from dotenv import load_dotenv
 
-
 CLOUD_PROVIDERS = {
     "OpenAI": "OPENAI_API_KEY",
     "Anthropic (Claude)": "ANTHROPIC_API_KEY",
@@ -29,8 +28,10 @@ def discover_ollama_models(base_url: str, timeout: float = 5.0) -> list[str]:
             data = json.load(response)
     except (HTTPError, URLError, TimeoutError, ValueError) as error:
         raise ConnectionError("Unable to retrieve models from Ollama") from error
-    if not isinstance(data, dict) or not isinstance(data.get("models"), list):
-        raise ValueError("Ollama returned an invalid model list")
+    if not isinstance(data, dict):
+        raise TypeError("Ollama returned an invalid model list")
+    if not isinstance(data.get("models"), list):
+        raise TypeError("Ollama returned an invalid model list")
     models = data["models"]
     return sorted({item["name"] for item in models if isinstance(item, dict) and isinstance(item.get("name"), str) and item["name"]})
 
@@ -45,7 +46,7 @@ def render_model_selector() -> dict[str, str | int] | None:
             return None
         try:
             models = discover_ollama_models(endpoint)
-        except (ConnectionError, ValueError) as error:
+        except (ConnectionError, ValueError, TypeError) as error:
             st.error(str(error))
             return None
         if not models:

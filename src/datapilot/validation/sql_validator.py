@@ -2,8 +2,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from sqlglot import exp, parse
-from sqlglot.errors import ParseError
-
+from sqlglot.errors import ErrorLevel, ParseError
 
 SQLDialect = Literal["sqlite", "postgresql", "mysql"]
 SUPPORTED_DIALECTS = frozenset({"sqlite", "postgresql", "mysql"})
@@ -27,7 +26,7 @@ def validate_sql(sql: str, dialect: SQLDialect) -> SQLValidationResult:
         raise SQLValidationError("Unsupported SQL dialect")
 
     try:
-        statements = parse(sql, read=dialect, error_level="RAISE")
+        statements = parse(sql, read=dialect, error_level=ErrorLevel.RAISE)
     except (ParseError, ValueError) as error:
         raise SQLValidationError("SQL could not be parsed for the selected dialect") from error
 
@@ -53,6 +52,14 @@ def validate_sql(sql: str, dialect: SQLDialect) -> SQLValidationResult:
         "pg_sleep", "sleep", "benchmark", "load_file", "sys_eval", "sys_exec",
         "dblink_exec", "lo_import", "lo_export", "pg_read_file", "pg_write_file",
         "pg_read_binary_file", "pg_ls_dir", "set_config", "nextval", "setval",
+        "load_extension", "readfile", "writefile", "pg_stat_file",
+    }
+    anonymous_functions = {
+        "strftime", "julianday", "date", "time", "datetime", "unixepoch",
+        "timediff", "printf", "format", "typeof", "instr", "ifnull",
+        "iif", "string_agg", "group_concat", "date_trunc", "date_part",
+        "to_char", "to_date", "to_timestamp", "round", "ceil", "floor",
+        "substring", "length", "lower", "upper", "trim", "replace",
     }
 
     for node in statement.walk():
@@ -60,6 +67,10 @@ def validate_sql(sql: str, dialect: SQLDialect) -> SQLValidationResult:
             raise SQLValidationError(f"Prohibited SQL operation: {type(node).__name__}")
         if isinstance(node, exp.Anonymous) and node.name.lower() in unsafe_functions:
             raise SQLValidationError(f"Prohibited SQL function: {node.name}")
+        if isinstance(node, exp.Anonymous) and node.name.lower() not in anonymous_functions:
+            raise SQLValidationError(f"Unverified SQL function: {node.name}")
+        if isinstance(node, exp.Dot) and isinstance(node.expression, exp.Func):
+            raise SQLValidationError("Schema-qualified SQL functions are not allowed")
         if isinstance(node, exp.Func) and node.sql_name().lower() in unsafe_functions:
             raise SQLValidationError(f"Prohibited SQL function: {node.sql_name()}")
 

@@ -5,7 +5,7 @@ import re
 import sqlite3
 import tempfile
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
@@ -16,7 +16,6 @@ import pandas as pd
 from datapilot.execution.pandas_executor import PandasExecutionResult
 from datapilot.execution.sql_executor import SQLExecutionResult
 from datapilot.persistence.sqlite_manager import open_database
-
 
 ResultKind = Literal["sql", "pandas"]
 
@@ -158,7 +157,7 @@ def save_result(
     data = _payload(result)
     content = json.dumps(data, allow_nan=False, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     identifier = uuid4().hex
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     relative_path = Path(session_id) / "results" / f"{identifier}.json"
     destination = _directory(Path(artifacts_directory), session_id) / f"{identifier}.json"
     initialize_results(Path(database_path))

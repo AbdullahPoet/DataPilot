@@ -1,8 +1,8 @@
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 from uuid import uuid4
 
 from datapilot.execution.sql_executor import SQLExecutionResult
@@ -46,10 +46,10 @@ def log_successful_sql_execution(
         raise TypeError("description must be text")
     if not isinstance(logs_directory, Path):
         raise TypeError("logs_directory must be a Path")
-    instant = timestamp or datetime.now(timezone.utc)
+    instant = timestamp or datetime.now(UTC)
     if not isinstance(instant, datetime) or instant.tzinfo is None or instant.utcoffset() is None:
         raise ValueError("timestamp must be timezone-aware")
-    instant = instant.astimezone(timezone.utc)
+    instant = instant.astimezone(UTC)
     references = tuple(artifact_references)
     if any(not isinstance(reference, str) or not reference.strip() for reference in references):
         raise ValueError("artifact references must be nonempty strings")

@@ -5,7 +5,6 @@ from typing import Any
 from datapilot.graph.nodes import prepare_analysis
 from datapilot.graph.state import AnalyticsState
 
-
 ResultStore = Callable[[str, object], str]
 
 
@@ -23,8 +22,8 @@ def build_sql_agent_workflow(
 ) -> Any:
     from langgraph.graph import END, START, StateGraph
 
-    from datapilot.agents.sql_agent import generate_sql
     from datapilot.graph.retry_orchestrator import execute_with_sql_repair
+    from datapilot.skills_engine.basic_knowledge_fallback import generate_sql_with_basic_fallback
     from datapilot.skills_engine.skill_orchestrator import orchestrate_skills
     from datapilot.validation.approval_manager import request_execution_approval
     from datapilot.validation.sql_validator import validate_sql
@@ -51,13 +50,14 @@ def build_sql_agent_workflow(
             model_family=model_family,
             source_context=schema_markdown,
         )
-        generated = generate_sql(
+        generated = generate_sql_with_basic_fallback(
             user_query=state["user_query"],
             schema_markdown=schema_markdown,
             dialect=dialect,
             model_configuration=model_configuration,
             skill_instructions=selection.instructions,
-        )
+            basic_skill_path=skills_directory / "basic" / "basic.md",
+        ).generation
         validate_sql(generated.sql, dialect)
         return {
             "generated_query": generated.sql,
@@ -73,6 +73,18 @@ def build_sql_agent_workflow(
             state["source_id"],
             state["generated_query"],
         )
+        if status == "pending":
+            from langgraph.types import interrupt
+
+            from datapilot.validation.approval_manager import decide_execution_approval
+
+            decision = interrupt({"query": state["generated_query"], "source_id": state["source_id"]})
+            if not isinstance(decision, bool):
+                raise ValueError("Approval decision must be a boolean")
+            status = decide_execution_approval(
+                approval_database_path, state["session_id"], state["source_id"],
+                state["generated_query"], decision,
+            )
         return {"approval_status": status}
 
     def approval_route(state: AnalyticsState) -> str:

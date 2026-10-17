@@ -1,6 +1,6 @@
 import hashlib
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -20,7 +20,7 @@ def _query_digest(query: str) -> str:
 
 
 def _timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+    return datetime.now(UTC).isoformat(timespec="microseconds")
 
 
 def initialize_approvals(database_path: Path) -> None:
@@ -94,7 +94,7 @@ def decide_execution_approval(
     source_id = _required_text(source_id, "source_id")
     digest = _query_digest(query)
     if not isinstance(approve, bool):
-        raise ValueError("approve must be a boolean")
+        raise TypeError("approve must be a boolean")
     decision: ApprovalDecision = "approved" if approve else "rejected"
     with open_database(database_path) as connection:
         _ensure_session(connection, session_id)

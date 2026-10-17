@@ -3,7 +3,7 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -54,6 +54,7 @@ def _atomic_write(target: Path, content: bytes) -> None:
 def _render_content(chart: RenderedChart) -> tuple[bytes, str, str]:
     if chart.library in {"matplotlib", "seaborn"}:
         from io import BytesIO
+
         from matplotlib.figure import Figure
 
         if not isinstance(chart.figure, Figure):
@@ -98,8 +99,8 @@ def save_chart_artifact(
     content, extension, media_type = _render_content(chart)
     if not content:
         raise ChartArtifactError("Rendered chart is empty")
-    created_at = datetime.now(timezone.utc).isoformat()
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    created_at = datetime.now(UTC).isoformat()
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     stem = f"{timestamp}_{safe_title}_{uuid4().hex[:12]}"
     file_path = directory / f"{stem}{extension}"
     metadata_path = directory / f"{stem}.json"

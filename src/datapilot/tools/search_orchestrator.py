@@ -3,9 +3,16 @@ from dataclasses import dataclass
 from typing import Literal
 
 from datapilot.agents.documentation_agent import DocumentationDecision, assess_documentation_need
-from datapilot.tools.cloud_search import NativeSearchUnavailable, native_search_supported, search_with_cloud_model
-from datapilot.tools.documentation_retriever import DocumentationSource, OFFICIAL_DOMAINS, retrieve_documentation
-
+from datapilot.tools.cloud_search import (
+    NativeSearchUnavailable,
+    native_search_supported,
+    search_with_cloud_model,
+)
+from datapilot.tools.documentation_retriever import (
+    OFFICIAL_DOMAINS,
+    DocumentationSource,
+    retrieve_documentation,
+)
 
 SearchStatus = Literal["not_needed", "retrieved", "unavailable"]
 

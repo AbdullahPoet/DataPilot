@@ -1,6 +1,5 @@
 from typing import Literal, NotRequired, TypedDict
 
-
 SourceType = Literal["sql", "csv", "xlsx"]
 ApprovalStatus = Literal["pending", "approved", "rejected"]
 ExecutionStatus = Literal["not_started", "running", "succeeded", "failed"]

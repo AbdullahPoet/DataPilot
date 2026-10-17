@@ -5,11 +5,10 @@ from typing import Literal
 
 from datapilot.models.model_manager import ChatMessage, invoke_model
 from datapilot.tools.documentation_retriever import (
-    DocumentationSource,
     OFFICIAL_DOMAINS,
+    DocumentationSource,
     retrieve_documentation,
 )
-
 
 DocumentationStatus = Literal["not_needed", "retrieved", "native_search_required"]
 

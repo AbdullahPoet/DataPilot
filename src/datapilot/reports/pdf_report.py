@@ -2,16 +2,16 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from xml.sax.saxutils import escape
 
 
 class PDFReportError(ValueError):
@@ -91,9 +91,9 @@ def generate_pdf_report(
     if Path(reports_directory).is_symlink() or directory.is_symlink():
         raise PDFReportError("Report directories cannot be symbolic links")
     directory.mkdir(parents=True, exist_ok=True)
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     slug = re.sub(r"[^a-z0-9]+", "_", data.title.lower()).strip("_")[:48] or "analysis"
-    filename = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S}_{slug}_{uuid4().hex[:12]}.pdf"
+    filename = f"{datetime.now(UTC):%Y%m%dT%H%M%S}_{slug}_{uuid4().hex[:12]}.pdf"
     destination = directory / filename
     styles = getSampleStyleSheet()
     heading = styles["Heading2"]

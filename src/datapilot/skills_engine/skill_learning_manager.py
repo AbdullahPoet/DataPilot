@@ -1,12 +1,11 @@
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 from datapilot.skills_engine.skill_registry import validate_model_family
-
 
 SLUG_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 EVIDENCE_STATUS = frozenset({"passed"})
@@ -105,7 +104,7 @@ def _markdown(skill: LearnedSkill, verifications: list[SkillVerification]) -> st
     ]
     for verification in verifications:
         summary.append(f"- {verification.test_name.strip()}: passed ({verification.evidence_reference.strip()})")
-    summary.extend(["", f"Verified at: {datetime.now(timezone.utc).isoformat()}", ""])
+    summary.extend(["", f"Verified at: {datetime.now(UTC).isoformat()}", ""])
     return "\n".join(summary)
 
 

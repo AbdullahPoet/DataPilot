@@ -3,7 +3,6 @@ from typing import BinaryIO
 
 import pandas as pd
 
-
 FileSource = Path | BinaryIO
 SUPPORTED_EXTENSIONS = frozenset({".csv", ".xlsx"})
 

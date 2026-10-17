@@ -5,7 +5,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import SQLAlchemyError
 
-
 SUPPORTED_DIALECTS = frozenset({"sqlite", "postgresql", "mysql"})
 
 

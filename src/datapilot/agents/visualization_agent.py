@@ -5,7 +5,6 @@ from typing import Literal
 
 from datapilot.models.model_manager import ChatMessage, invoke_model
 
-
 ChartType = Literal["bar", "line", "scatter", "histogram", "box", "pie"]
 ChartLibrary = Literal["matplotlib", "seaborn", "plotly", "bokeh"]
 

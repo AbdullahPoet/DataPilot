@@ -4,7 +4,6 @@ from pathlib import Path
 
 from datapilot.skills_engine.skill_registry import SkillInfo, discover_skills
 
-
 WORD_PATTERN = re.compile(r"[a-z0-9]+")
 STOP_WORDS = frozenset(
     {

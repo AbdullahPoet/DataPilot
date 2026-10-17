@@ -11,7 +11,6 @@ from datapilot.skills_engine.skill_loader import load_selected_skills
 from datapilot.skills_engine.skill_matcher import SkillMatch, match_skills
 from datapilot.skills_engine.skill_registry import discover_skills, validate_model_family
 
-
 SourceType = Literal["sql", "csv", "xlsx"]
 
 

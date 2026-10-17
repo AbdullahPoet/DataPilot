@@ -5,7 +5,6 @@ from typing import Literal
 
 from datapilot.models.model_manager import ChatMessage, invoke_model
 
-
 ComplexityLevel = Literal["easy", "medium", "hard"]
 
 
