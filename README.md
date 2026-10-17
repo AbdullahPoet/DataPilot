@@ -87,6 +87,18 @@ Approval covers subsequent validated, read-only analyses of the same source in t
 
 ## Configuration
 
+### SQL database connections
+
+Select **New Analytics → SQL → Create Analytics Session**, then choose the **Database type**.
+
+| Database | What to enter |
+| --- | --- |
+| SQLite | The full path to an existing database file, such as `D:\Data\sales.db`. No username or password is needed. |
+| PostgreSQL | Host (`localhost` or the server address), port (default `5432`), database name, username, and password. |
+| MySQL | Host (`localhost` or the server address), port (default `3306`), database name, username, and password. |
+
+Click **Connect and load schema**. Once the connection succeeds, configure and save a model to start asking questions. PostgreSQL/MySQL servers must be running and reachable; use an account with read-only access to the required tables. After restarting DataPilot, reconnect to resume database execution.
+
 ### Local models
 
 DataPilot discovers installed models from the configured Ollama endpoint, initially `http://localhost:11434`. I start Ollama and install models separately; the app does neither automatically.
