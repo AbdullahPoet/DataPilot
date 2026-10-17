@@ -35,7 +35,11 @@ def build_sql_agent_workflow(
         raise ValueError("Unsupported SQL dialect")
     if not callable(result_store):
         raise TypeError("A result storage callback is required")
-    if isinstance(max_repairs, bool) or not isinstance(max_repairs, int) or not 0 <= max_repairs <= 3:
+    if (
+        isinstance(max_repairs, bool)
+        or not isinstance(max_repairs, int)
+        or not 0 <= max_repairs <= 3
+    ):
         raise ValueError("max_repairs must be between 0 and 3")
 
     def prepare(state: AnalyticsState) -> dict[str, object]:
@@ -56,13 +60,17 @@ def build_sql_agent_workflow(
             schema_markdown=schema_markdown,
             dialect=dialect,
             model_configuration=model_configuration,
-            skill_instructions="\n\n".join(filter(None, [selection.instructions, state.get("analysis_context", "")])),
+            skill_instructions="\n\n".join(
+                filter(None, [selection.instructions, state.get("analysis_context", "")])
+            ),
             basic_skill_path=skills_directory / "basic" / "basic.md",
+            model_family=model_family,
         ).generation
         validate_sql(generated.sql, dialect)
         return {
             "generated_query": generated.sql,
             "skill_paths": [str(match.skill.path) for match in selection.selected],
+            "sql_skill_instructions": selection.instructions,
             "query_version": 1,
             "execution_status": "not_started",
         }
@@ -79,12 +87,17 @@ def build_sql_agent_workflow(
 
             from datapilot.validation.approval_manager import decide_execution_approval
 
-            decision = interrupt({"query": state["generated_query"], "source_id": state["source_id"]})
+            decision = interrupt(
+                {"query": state["generated_query"], "source_id": state["source_id"]}
+            )
             if not isinstance(decision, bool):
                 raise ValueError("Approval decision must be a boolean")
             status = decide_execution_approval(
-                approval_database_path, state["session_id"], state["source_id"],
-                state["generated_query"], decision,
+                approval_database_path,
+                state["session_id"],
+                state["source_id"],
+                state["generated_query"],
+                decision,
             )
         return {"approval_status": status}
 
@@ -103,6 +116,9 @@ def build_sql_agent_workflow(
             dialect=dialect,
             model_configuration=model_configuration,
             max_repairs=max_repairs,
+            skill_instructions=state.get("sql_skill_instructions", ""),
+            skills_directory=skills_directory,
+            model_family=model_family,
         )
         reference = result_store(state["session_id"], retry_result.result)
         if not isinstance(reference, str) or not reference.strip():
@@ -112,9 +128,13 @@ def build_sql_agent_workflow(
             from datapilot.execution.execution_logger import log_successful_sql_execution
 
             log = log_successful_sql_execution(
-                logs_directory=logs_directory, session_id=state["session_id"], source_id=state["source_id"],
-                sql=retry_result.executed_sql, result=retry_result.result,
-                description=state["user_query"], artifact_references=[reference],
+                logs_directory=logs_directory,
+                session_id=state["session_id"],
+                source_id=state["source_id"],
+                sql=retry_result.executed_sql,
+                result=retry_result.result,
+                description=state["user_query"],
+                artifact_references=[reference],
             )
             artifacts.append({"kind": "log", "path": str(log.path)})
         return {

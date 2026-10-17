@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-COMMON_LEVELS = ("easy", "medium", "hard")
+COMMON_LEVELS = ("easy", "mid", "medium", "hard")
 MODEL_FAMILY_PATTERN = re.compile(r"[a-z][a-z0-9_-]*\Z")
 
 
@@ -36,7 +36,7 @@ def _read_metadata(path: Path) -> tuple[str, str]:
     for line in lines[1:closing]:
         key, separator, value = line.partition(":")
         if separator and key.strip() in {"name", "description"}:
-            fields[key.strip()] = value.strip().strip('"\'')
+            fields[key.strip()] = value.strip().strip("\"'")
     name = fields.get("name", "")
     description = fields.get("description", "")
     if not name or not description:
@@ -56,9 +56,13 @@ def discover_skills(skills_directory: Path, model_family: str) -> list[SkillInfo
         if directory.is_symlink() or not directory.is_dir():
             continue
         paths = directory.glob("*.md") if category == "dialects" else directory.rglob("SKILL.md")
+        if category in COMMON_LEVELS:
+            paths = sorted(set(directory.glob("*.md")) | set(directory.rglob("SKILL.md")))
         for path in sorted(paths):
             if not path.is_file() or not path.resolve().is_relative_to(directory):
                 continue
             name, description = _read_metadata(path)
-            skills.append(SkillInfo(name, description, category, path))
+            skills.append(
+                SkillInfo(name, description, "medium" if category == "mid" else category, path)
+            )
     return skills

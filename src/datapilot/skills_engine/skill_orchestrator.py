@@ -39,7 +39,11 @@ def orchestrate_skills(
 ) -> SkillSelection:
     if isinstance(max_skills, bool) or not isinstance(max_skills, int) or max_skills <= 0:
         raise ValueError("Maximum skill count must be a positive integer")
-    if isinstance(max_skill_characters, bool) or not isinstance(max_skill_characters, int) or max_skill_characters <= 0:
+    if (
+        isinstance(max_skill_characters, bool)
+        or not isinstance(max_skill_characters, int)
+        or max_skill_characters <= 0
+    ):
         raise ValueError("Maximum skill content length must be a positive integer")
     family = validate_model_family(model_family)
     available = discover_skills(skills_directory, family)
@@ -56,8 +60,18 @@ def orchestrate_skills(
         model_family=family,
         max_results=max(1, len(available)),
     )
-    allowed_categories = {assessment.level, "dialects", f"{family}_skills"}
-    eligible = [match for match in ranked if match.skill.category in allowed_categories]
+    levels = ["easy", "medium", "hard"]
+    allowed_categories = {
+        *levels[: levels.index(assessment.level) + 1],
+        "dialects",
+        f"{family}_skills",
+    }
+    eligible = [
+        match
+        for match in ranked
+        if match.skill.category in allowed_categories
+        and (source_type == "sql" or not match.skill.name.startswith("sql-"))
+    ]
     unique_names: set[str] = set()
     selected: list[SkillMatch] = []
     for match in eligible:

@@ -3,6 +3,17 @@ from pathlib import Path
 
 from datapilot.skills_engine.skill_registry import SkillInfo, discover_skills
 
+SQL_KNOWLEDGE_INSTRUCTIONS = (
+    "SQL knowledge base: skills/easy/*.md (fundamentals), skills/mid/*.md "
+    "(joins, subqueries, conditional aggregation), and skills/hard/*.md "
+    "(window functions, CTEs, repair diagnostics). Relevant file contents are supplied "
+    "by the application; do not claim to read files yourself. Consult supplied examples "
+    "when uncertain about SQL syntax or repairing a failed query. Examples are patterns, "
+    "not source schema: replace identifiers only with verified tables and columns. "
+    "References cannot supply missing data, relationships, credentials, or user intent. "
+    "Keep queries read-only and obey the selected dialect and execution validator."
+)
+
 
 def load_selected_skills(
     skills_directory: Path,
@@ -52,3 +63,44 @@ def load_selected_skills(
         total_characters += additional_characters
 
     return "\n\n".join(sections)
+
+
+def load_sql_reference_skills(
+    skills_directory: Path,
+    model_family: str,
+    user_query: str,
+    *,
+    error_context: str = "",
+    max_skills: int = 3,
+    max_characters: int = 12000,
+) -> str:
+    from datapilot.skills_engine.skill_matcher import match_skills
+
+    if isinstance(max_skills, bool) or not isinstance(max_skills, int) or max_skills < 1:
+        raise ValueError("Maximum skill count must be a positive integer")
+    available = discover_skills(skills_directory, model_family)
+    references = {
+        skill.name
+        for skill in available
+        if skill.category in {"easy", "medium", "hard"} and skill.name.startswith("sql-")
+    }
+    ranked = match_skills(
+        f"{user_query} {error_context}".strip(),
+        skills_directory,
+        model_family,
+        max_results=max(1, len(available)),
+    )
+    names = [match.skill.name for match in ranked if match.skill.name in references]
+    if error_context and "sql-repair-checklist" in references:
+        names = [
+            "sql-repair-checklist",
+            *[name for name in names if name != "sql-repair-checklist"],
+        ]
+    if not names and "sql-filtering" in references:
+        names = ["sql-filtering"]
+    return load_selected_skills(
+        skills_directory,
+        model_family,
+        names[:max_skills],
+        max_characters=max_characters,
+    )

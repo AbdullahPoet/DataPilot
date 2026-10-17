@@ -27,6 +27,7 @@ class AnalyticsState(TypedDict):
     execution_status: ExecutionStatus
     attempt_count: int
     skill_paths: NotRequired[list[str]]
+    sql_skill_instructions: NotRequired[str]
     schema_path: NotRequired[str]
     generated_query: NotRequired[str]
     query_language: NotRequired[Literal["sql", "pandas"]]

@@ -24,9 +24,10 @@ def validate_sql(sql: str, dialect: SQLDialect) -> SQLValidationResult:
         raise SQLValidationError("SQL must be a non-empty string")
     if dialect not in SUPPORTED_DIALECTS:
         raise SQLValidationError("Unsupported SQL dialect")
+    parser_dialect = "postgres" if dialect == "postgresql" else dialect
 
     try:
-        statements = parse(sql, read=dialect, error_level=ErrorLevel.RAISE)
+        statements = parse(sql, read=parser_dialect, error_level=ErrorLevel.RAISE)
     except (ParseError, ValueError) as error:
         raise SQLValidationError("SQL could not be parsed for the selected dialect") from error
 
@@ -75,5 +76,5 @@ def validate_sql(sql: str, dialect: SQLDialect) -> SQLValidationResult:
             raise SQLValidationError(f"Prohibited SQL function: {node.sql_name()}")
 
     tables = tuple(sorted({table.name for table in statement.find_all(exp.Table) if table.name}))
-    normalized_sql = statement.sql(dialect=dialect)
+    normalized_sql = statement.sql(dialect=parser_dialect)
     return SQLValidationResult(sql=normalized_sql, dialect=dialect, referenced_tables=tables)

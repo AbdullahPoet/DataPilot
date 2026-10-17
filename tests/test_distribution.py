@@ -21,7 +21,10 @@ def test_built_distribution_contains_all_backend_modules(tmp_path: Path) -> None
         assert expected.issubset(archive.namelist())
         archive.extractall(extracted)
     with tarfile.open(next(output.glob("*.tar.gz"))) as archive:
-        assert not any(Path(name).name == "AGENTS.md" for name in archive.getnames())
+        members = archive.getnames()
+        assert not any(Path(name).name == "AGENTS.md" for name in members)
+        for reference in Path("skills").rglob("*.md"):
+            assert any(name.endswith("/" + reference.as_posix()) for name in members)
     code = (
         "import importlib, pathlib, sys; root = pathlib.Path(sys.argv[1]); "
         "sys.path.insert(0, str(root)); "

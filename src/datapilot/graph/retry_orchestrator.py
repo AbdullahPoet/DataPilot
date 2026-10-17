@@ -10,6 +10,7 @@ from datapilot.execution.sql_executor import (
     SQLExecutionResult,
     execute_sql,
 )
+from datapilot.skills_engine.skill_loader import load_sql_reference_skills
 from datapilot.validation.sql_validator import validate_sql
 
 
@@ -42,7 +43,7 @@ _RECOVERABLE_ERRORS = {
     "undefined column": "missing column",
     "ambiguous column": "ambiguous column",
     "syntax error": "SQL syntax error",
-    "near \"": "SQL syntax error",
+    'near "': "SQL syntax error",
     "not a group by expression": "grouping error",
     "must appear in the group by": "grouping error",
     "misuse of aggregate": "aggregation error",
@@ -93,13 +94,23 @@ def execute_with_sql_repair(
     dialect: SQLDialect,
     model_configuration: Mapping[str, str | int],
     skill_instructions: str = "",
+    skills_directory: Path | None = None,
+    model_family: str = "generic",
     max_repairs: int = 3,
     timeout_seconds: float = 30.0,
     max_rows: int = 1000,
 ) -> SQLRetryResult:
-    if not isinstance(max_repairs, int) or isinstance(max_repairs, bool) or not 0 <= max_repairs <= 3:
+    if (
+        not isinstance(max_repairs, int)
+        or isinstance(max_repairs, bool)
+        or not 0 <= max_repairs <= 3
+    ):
         raise ValueError("max_repairs must be an integer between 0 and 3")
-    for label, value in (("sql", sql), ("user_query", user_query), ("schema_markdown", schema_markdown)):
+    for label, value in (
+        ("sql", sql),
+        ("user_query", user_query),
+        ("schema_markdown", schema_markdown),
+    ):
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{label} must be non-empty text")
     if not isinstance(skill_instructions, str):
@@ -130,6 +141,16 @@ def execute_with_sql_repair(
                 raise
             if repair_count == max_repairs:
                 raise SQLRetryExhausted(tuple(attempts)) from error
+            references = (
+                load_sql_reference_skills(
+                    skills_directory,
+                    model_family,
+                    user_query,
+                    error_context=category,
+                )
+                if skills_directory is not None
+                else ""
+            )
             repaired = repair_sql(
                 user_query=user_query,
                 original_sql=current_sql,
@@ -137,7 +158,7 @@ def execute_with_sql_repair(
                 schema_markdown=schema_markdown,
                 dialect=dialect,
                 model_configuration=model_configuration,
-                skill_instructions=skill_instructions,
+                skill_instructions="\n\n".join(filter(None, [skill_instructions, references])),
             )
             candidate = repaired.sql.strip()
             if candidate in seen:
