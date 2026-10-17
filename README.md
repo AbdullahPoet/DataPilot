@@ -53,7 +53,7 @@ This is the starting screen: I create a new analysis from the sidebar or reopen 
 ### Install and run
 
 ```powershell
-git clone --branch codex https://github.com/AbdullahPoet/DataPilot.git
+git clone --branch main https://github.com/AbdullahPoet/DataPilot.git
 cd DataPilot
 uv sync --locked
 uv run --locked python app.py
