@@ -9,7 +9,9 @@ def _integer(value: object, field: str) -> int:
 
 
 def _text(value: object, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string")
+    if not value.strip():
         raise ValueError(f"{field} must be non-empty text")
     return value
 
@@ -18,7 +20,7 @@ def _display(value: object) -> str:
     if value is None:
         return "N/A"
     if not isinstance(value, (str, int, float)) or isinstance(value, bool):
-        raise ValueError("Unsupported statistic value")
+        raise TypeError("Unsupported statistic value")
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
@@ -46,7 +48,7 @@ def format_file_knowledge(profile: Mapping[str, object]) -> str:
     seen: set[str] = set()
     for raw_column in raw_columns:
         if not isinstance(raw_column, Mapping):
-            raise ValueError("Each column must be a mapping")
+            raise TypeError("Each column must be a mapping")
         name = _text(raw_column.get("name"), "column name")
         dtype = _text(raw_column.get("dtype"), "column dtype")
         kind = _text(raw_column.get("kind"), "column kind")

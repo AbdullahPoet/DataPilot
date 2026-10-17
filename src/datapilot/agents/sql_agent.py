@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from datapilot.models.model_manager import ChatMessage, invoke_model
+from datapilot.models.response_schemas import SQL_GENERATION
 
 SQLDialect = Literal["sqlite", "postgresql", "mysql"]
 SUPPORTED_DIALECTS = frozenset({"sqlite", "postgresql", "mysql"})
@@ -92,6 +93,8 @@ def generate_sql(
         [ChatMessage(role="system", content=system_prompt), ChatMessage(role="user", content=user_prompt)],
         max_output_tokens=max_output_tokens,
         timeout=timeout,
+        json_output=True,
+        response_schema=SQL_GENERATION,
     )
     sql, explanation, assumptions = _parse_generation(response.content)
     if not sql:

@@ -19,6 +19,7 @@ def build_sql_agent_workflow(
     model_family: str,
     result_store: ResultStore,
     max_repairs: int = 3,
+    logs_directory: Path | None = None,
 ) -> Any:
     from langgraph.graph import END, START, StateGraph
 
@@ -55,7 +56,7 @@ def build_sql_agent_workflow(
             schema_markdown=schema_markdown,
             dialect=dialect,
             model_configuration=model_configuration,
-            skill_instructions=selection.instructions,
+            skill_instructions="\n\n".join(filter(None, [selection.instructions, state.get("analysis_context", "")])),
             basic_skill_path=skills_directory / "basic" / "basic.md",
         ).generation
         validate_sql(generated.sql, dialect)
@@ -106,6 +107,16 @@ def build_sql_agent_workflow(
         reference = result_store(state["session_id"], retry_result.result)
         if not isinstance(reference, str) or not reference.strip():
             raise ValueError("Result storage must return a non-empty reference")
+        artifacts = [{"kind": "result", "path": reference}]
+        if logs_directory is not None:
+            from datapilot.execution.execution_logger import log_successful_sql_execution
+
+            log = log_successful_sql_execution(
+                logs_directory=logs_directory, session_id=state["session_id"], source_id=state["source_id"],
+                sql=retry_result.executed_sql, result=retry_result.result,
+                description=state["user_query"], artifact_references=[reference],
+            )
+            artifacts.append({"kind": "log", "path": str(log.path)})
         return {
             "generated_query": retry_result.executed_sql,
             "attempt_count": len(retry_result.attempts),
@@ -113,6 +124,7 @@ def build_sql_agent_workflow(
             "result_reference": reference,
             "execution_status": "succeeded",
             "error": None,
+            "artifacts": artifacts,
         }
 
     graph = StateGraph(AnalyticsState)

@@ -1,15 +1,15 @@
 .venv/
 .uv-cache/
 .pytest_cache/
-.pytest-tmp/
+/.pytest-*/
 .ruff_cache/
 __pycache__/
 *.py[cod]
 *.egg-info/
 .env
-storage/
-sessions/
-knowledge/
-dist/
-build/
+/storage/
+/sessions/
+/knowledge/
+/dist/
+/build/
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from datapilot.models.model_manager import ChatMessage, invoke_model
+from datapilot.models.response_schemas import DOCUMENTATION
 from datapilot.tools.documentation_retriever import (
     OFFICIAL_DOMAINS,
     DocumentationSource,
@@ -92,6 +93,8 @@ def assess_documentation_need(
         model_configuration,
         (ChatMessage(role="system", content=system_prompt), ChatMessage(role="user", content=user_prompt)),
         max_output_tokens=350,
+        json_output=True,
+        response_schema=DOCUMENTATION,
     )
     return _parse_decision(response.content, topic)
 

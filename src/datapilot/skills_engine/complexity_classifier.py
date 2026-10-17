@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from datapilot.models.model_manager import ChatMessage, invoke_model
+from datapilot.models.response_schemas import COMPLEXITY
 
 ComplexityLevel = Literal["easy", "medium", "hard"]
 
@@ -84,5 +85,7 @@ def classify_query_complexity(
         ],
         max_output_tokens=256,
         timeout=timeout,
+        json_output=True,
+        response_schema=COMPLEXITY,
     )
     return _parse_classification(response.content, response.model, response.provider)

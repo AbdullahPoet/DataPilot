@@ -53,11 +53,11 @@ def discover_skills(skills_directory: Path, model_family: str) -> list[SkillInfo
     skills: list[SkillInfo] = []
     for category in categories:
         directory = root / category
-        if not directory.is_dir():
+        if directory.is_symlink() or not directory.is_dir():
             continue
         paths = directory.glob("*.md") if category == "dialects" else directory.rglob("SKILL.md")
         for path in sorted(paths):
-            if not path.is_file() or not path.resolve().is_relative_to(root):
+            if not path.is_file() or not path.resolve().is_relative_to(directory):
                 continue
             name, description = _read_metadata(path)
             skills.append(SkillInfo(name, description, category, path))

@@ -71,7 +71,7 @@ def build_pandas_agent_workflow(
             file_profile=file_profile,
             file_type=state["source_type"],
             model_configuration=model_configuration,
-            skill_instructions=skill_instructions,
+            skill_instructions="\n\n".join(filter(None, [skill_instructions, state.get("analysis_context", "")])),
         )
         validated = validate_pandas_plan(generated, frame.columns)
         return {

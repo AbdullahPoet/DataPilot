@@ -45,7 +45,7 @@ def format_schema_markdown(metadata: Mapping[str, object]) -> str:
             data_type = _required_text(column, "type")
             nullable = column.get("nullable")
             if not isinstance(nullable, bool):
-                raise ValueError("nullable must be a boolean")
+                raise TypeError("nullable must be a boolean")
             lines.append(f"- {_identifier(name)}: {_identifier(data_type)}, nullable: {nullable}")
 
         primary_key = _names(table.get("primary_key"), "primary_key")

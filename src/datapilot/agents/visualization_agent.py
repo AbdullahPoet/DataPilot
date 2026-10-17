@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from datapilot.models.model_manager import ChatMessage, invoke_model
+from datapilot.models.response_schemas import VISUALIZATION
 
 ChartType = Literal["bar", "line", "scatter", "histogram", "box", "pie"]
 ChartLibrary = Literal["matplotlib", "seaborn", "plotly", "bokeh"]
@@ -150,6 +151,8 @@ def plan_visualization(
         [ChatMessage(role="system", content=system), ChatMessage(role="user", content=request)],
         max_output_tokens=max_output_tokens,
         timeout=timeout,
+        json_output=True,
+        response_schema=VISUALIZATION,
     )
     plan = _validate_plan(response.content, column_types, model=response.model, provider=response.provider)
     if plan.library not in preferred_libraries:

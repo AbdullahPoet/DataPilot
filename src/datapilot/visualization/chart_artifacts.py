@@ -85,6 +85,7 @@ def save_chart_artifact(
     artifacts_directory: Path,
     session_id: str,
     title: str,
+    result_id: str | None = None,
 ) -> ChartArtifact:
     if not isinstance(chart, RenderedChart):
         raise ChartArtifactError("A RenderedChart is required")
@@ -92,7 +93,11 @@ def save_chart_artifact(
         raise ChartArtifactError("Chart must contain observations")
     safe_id = _safe_session_id(session_id)
     safe_title = _safe_title(title)
+    if result_id is not None:
+        _safe_session_id(result_id)
     directory = Path(artifacts_directory) / safe_id / "charts"
+    if any(path.is_symlink() for path in (Path(artifacts_directory), directory.parent, directory)):
+        raise ChartArtifactError("Chart directories cannot be symbolic links")
     directory.mkdir(parents=True, exist_ok=True)
     if directory.is_symlink():
         raise ChartArtifactError("Chart directory cannot be a symbolic link")
@@ -105,6 +110,7 @@ def save_chart_artifact(
     file_path = directory / f"{stem}{extension}"
     metadata_path = directory / f"{stem}.json"
     metadata: dict[str, Any] = {
+        "result_id": result_id,
         "session_id": safe_id,
         "library": chart.library,
         "chart_type": chart.chart_type,

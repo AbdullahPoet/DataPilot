@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from datapilot.models.model_manager import ChatMessage, invoke_model
+from datapilot.models.response_schemas import PANDAS_PLAN
 
 FileType = Literal["csv", "xlsx"]
 
@@ -112,6 +113,8 @@ def plan_pandas_analysis(
         ],
         max_output_tokens=max_output_tokens,
         timeout=timeout,
+        json_output=True,
+        response_schema=PANDAS_PLAN,
     )
     operations, columns, explanation, assumptions = _parse_plan(response.content)
     return PandasAnalysisPlan(

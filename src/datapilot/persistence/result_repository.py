@@ -219,7 +219,7 @@ def load_result(
     expected = base / session_id / "results" / f"{result_id}.json"
     if record["relative_path"] != (Path(session_id) / "results" / f"{result_id}.json").as_posix():
         raise ResultRepositoryError("Invalid result artifact reference")
-    if expected.is_symlink() or expected.parent.is_symlink():
+    if expected.resolve() != expected or expected.is_symlink() or expected.parent.is_symlink():
         raise ResultRepositoryError("Symlink result artifact is not allowed")
     content = expected.read_bytes()
     if hashlib.sha256(content).hexdigest() != record["sha256"]:

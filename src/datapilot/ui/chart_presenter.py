@@ -35,7 +35,7 @@ def present_chart(chart: RenderedChart, *, client: Any | None = None) -> None:
 
         if not isinstance(chart.figure, Figure):
             raise ChartPresentationError("Invalid Plotly figure")
-        st.plotly_chart(chart.figure, use_container_width=True)
+        st.plotly_chart(chart.figure, width="stretch")
     elif chart.library == "bokeh":
         from bokeh.models import Model
 
@@ -98,7 +98,7 @@ def present_saved_chart(
     if expected_media == "image/png":
         if not data.startswith(b"\x89PNG\r\n\x1a\n"):
             raise ChartPresentationError("Invalid PNG artifact")
-        st.image(data, caption=metadata.get("title", "Saved chart"), use_container_width=True)
+        st.image(data, caption=metadata.get("title", "Saved chart"), width="stretch")
     else:
         st.info("Interactive HTML charts are available as downloads, not embedded in the application.")
         st.download_button(

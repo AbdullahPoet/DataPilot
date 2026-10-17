@@ -35,6 +35,8 @@ class AnalyticsState(TypedDict):
     visualization_spec: NotRequired[dict[str, str | int | float | bool | None]]
     artifacts: NotRequired[list[ArtifactReference]]
     error: NotRequired[WorkflowError | None]
+    analysis_context: NotRequired[str]
+    documentation_status: NotRequired[str]
 
 
 def create_analytics_state(

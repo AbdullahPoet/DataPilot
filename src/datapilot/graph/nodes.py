@@ -8,6 +8,8 @@ class NodeUpdate(TypedDict, total=False):
     execution_status: Literal["not_started"]
     attempt_count: int
     error: None
+    result_reference: str
+    generated_query: str
 
 
 def validate_request(state: AnalyticsState) -> NodeUpdate:
@@ -38,4 +40,6 @@ def prepare_analysis(state: AnalyticsState) -> NodeUpdate:
         "execution_status": "not_started",
         "attempt_count": 0,
         "error": None,
+        "result_reference": "",
+        "generated_query": "",
     }

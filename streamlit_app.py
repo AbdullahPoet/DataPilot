@@ -1,24 +1,21 @@
 import json
-import sys
+import os
 from pathlib import Path
 
 import streamlit as st
 
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-SOURCE_ROOT = PROJECT_ROOT / "src"
-DATABASE_PATH = PROJECT_ROOT / "storage" / "app.db"
-KNOWLEDGE_DIRECTORY = PROJECT_ROOT / "knowledge"
-
-if str(SOURCE_ROOT) not in sys.path:
-    sys.path.insert(0, str(SOURCE_ROOT))
-
-from datapilot.persistence.session_repository import create_session
-from datapilot.persistence.sqlite_manager import open_database
-from datapilot.ui.connection_form import render_connection_form
+from datapilot.application import initialize_application
 from datapilot.ingestion.file_loader import inspect_excel_sheets, load_data_file
 from datapilot.knowledge.file_knowledge_cache import load_file_knowledge
+from datapilot.persistence.session_repository import create_session
+from datapilot.persistence.sqlite_manager import open_database
+from datapilot.ui.analytics_workspace import render_analytics
+from datapilot.ui.connection_form import render_connection_form
 from datapilot.ui.sidebar import render_sidebar
+
+PROJECT_ROOT = Path(os.environ.get("DATAPILOT_HOME", Path(__file__).resolve().parent)).resolve()
+DATABASE_PATH = PROJECT_ROOT / "storage" / "app.db"
+KNOWLEDGE_DIRECTORY = PROJECT_ROOT / "knowledge"
 
 
 def save_source_configuration(session_id: str, configuration: dict[str, object]) -> None:
@@ -67,7 +64,6 @@ def render_configuration() -> None:
     st.rerun()
 
 
-
 def render_file_workspace(configuration: dict[str, object], source_type: str) -> None:
     session_id = st.session_state.get("active_session_id")
     if not isinstance(session_id, str):
@@ -84,13 +80,18 @@ def render_file_workspace(configuration: dict[str, object], source_type: str) ->
             st.write(f"Worksheet: {saved_sheet}")
         frame = st.session_state.get(f"frame_{session_id}")
         if frame is not None:
-            st.dataframe(frame.head(20), use_container_width=True)
-        elif isinstance(saved_path, str) and st.button("Restore saved data", key=f"restore_{session_id}"):
+            st.dataframe(frame.head(20), width="stretch")
+        elif isinstance(saved_path, str) and st.button(
+            "Restore saved data", key=f"restore_{session_id}"
+        ):
             source = Path(saved_path)
             try:
-                frame = load_data_file(source, sheet_name=saved_sheet if isinstance(saved_sheet, str) else None)
+                frame = load_data_file(
+                    source, sheet_name=saved_sheet if isinstance(saved_sheet, str) else None
+                )
                 knowledge = load_file_knowledge(
-                    source, KNOWLEDGE_DIRECTORY / "files",
+                    source,
+                    KNOWLEDGE_DIRECTORY / "files",
                     sheet_name=saved_sheet if isinstance(saved_sheet, str) else None,
                 )
             except (OSError, ValueError, TypeError, ImportError, UnicodeError) as error:
@@ -100,16 +101,14 @@ def render_file_workspace(configuration: dict[str, object], source_type: str) ->
                 st.session_state[f"knowledge_{session_id}"] = knowledge
                 st.rerun()
 
-    method = st.radio("File location", ("Upload", "Local path", "Web URL"), key=f"{session_id}_location")
-    if method == "Web URL":
-        st.text_input("Web URL", key=f"{session_id}_web_url")
-        st.info("Web URL retrieval is not implemented yet.")
-        return
+    method = st.radio("File location", ("Upload", "Local path"), key=f"{session_id}_location")
 
     source = None
     if method == "Upload":
         uploaded = st.file_uploader(
-            "Choose a file", type=[source_type], accept_multiple_files=False,
+            "Choose a file",
+            type=[source_type],
+            accept_multiple_files=False,
             key=f"{session_id}_upload",
         )
         if uploaded is not None:
@@ -132,9 +131,13 @@ def render_file_workspace(configuration: dict[str, object], source_type: str) ->
         if not sheets:
             st.warning("No worksheets found.")
             return
-        preferred = saved_sheet if isinstance(saved_sheet, str) and saved_sheet in sheets else sheets[0]
+        preferred = (
+            saved_sheet if isinstance(saved_sheet, str) and saved_sheet in sheets else sheets[0]
+        )
         sheet_name = st.selectbox(
-            "Choose worksheet", sheets, index=sheets.index(preferred),
+            "Choose worksheet",
+            sheets,
+            index=sheets.index(preferred),
             key=f"{session_id}_sheet",
         )
 
@@ -144,7 +147,9 @@ def render_file_workspace(configuration: dict[str, object], source_type: str) ->
     try:
         frame = load_data_file(source, sheet_name=sheet_name)
         knowledge = load_file_knowledge(
-            source, KNOWLEDGE_DIRECTORY / "files", sheet_name=sheet_name,
+            source,
+            KNOWLEDGE_DIRECTORY / "files",
+            sheet_name=sheet_name,
         )
         if isinstance(source, Path):
             persistent_path = source.resolve()
@@ -160,7 +165,7 @@ def render_file_workspace(configuration: dict[str, object], source_type: str) ->
     updated = {
         **configuration,
         "source_configured": True,
-        "file_name": source.name if isinstance(source, Path) else source.name,
+        "file_name": source.name,
         "file_path": str(persistent_path),
         "sheet_name": sheet_name,
     }
@@ -174,7 +179,7 @@ def render_file_workspace(configuration: dict[str, object], source_type: str) ->
     st.session_state[f"frame_{session_id}"] = frame
     st.session_state[f"knowledge_{session_id}"] = knowledge
     st.success("File source and selected worksheet saved to this session.")
-    st.dataframe(frame.head(20), use_container_width=True)
+    st.dataframe(frame.head(20), width="stretch")
     st.text_area("Verified file knowledge", value=knowledge, height=250, disabled=True)
 
 
@@ -191,6 +196,9 @@ def render_chat() -> None:
 
     if source_type in {"csv", "xlsx"}:
         render_file_workspace(configuration, source_type)
+        render_analytics(
+            PROJECT_ROOT, st.session_state.active_session_id, st.session_state.session_config
+        )
         return
     if source_type != "sql":
         st.error("Unsupported data source configuration.")
@@ -206,6 +214,7 @@ def render_chat() -> None:
 
     connection_info = render_connection_form(KNOWLEDGE_DIRECTORY)
     if connection_info is None:
+        render_analytics(PROJECT_ROOT, st.session_state.active_session_id, configuration)
         return
 
     session_id = st.session_state.get("active_session_id")
@@ -228,10 +237,12 @@ def render_chat() -> None:
 
     st.session_state.session_config = updated_config
     st.success("Database details saved to this session without credentials.")
+    render_analytics(PROJECT_ROOT, session_id, updated_config)
 
 
 def main() -> None:
     st.set_page_config(page_title="DataPilot", page_icon="📊", layout="wide")
+    initialize_application(DATABASE_PATH)
     if "page" not in st.session_state:
         st.session_state.page = "home"
     render_sidebar(DATABASE_PATH)

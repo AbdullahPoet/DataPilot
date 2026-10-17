@@ -11,8 +11,9 @@ from datapilot.knowledge.schema_cache import load_schema_knowledge
 
 def render_connection_form(knowledge_directory: Path) -> ConnectionInfo | None:
     st.subheader("SQL Database Connection")
+    session_id = st.session_state.get("active_session_id", "configuration")
+    dialect = st.selectbox("Database type", ("SQLite", "PostgreSQL", "MySQL"), key=f"dialect_{session_id}")
     with st.form("sql_connection_form"):
-        dialect = st.selectbox("Database type", ("SQLite", "PostgreSQL", "MySQL"))
         if dialect == "SQLite":
             file_path = st.text_input("Existing database file path")
             host = ""
@@ -66,5 +67,6 @@ def render_connection_form(knowledge_directory: Path) -> ConnectionInfo | None:
         return None
 
     st.success("Database connection verified.")
+    st.session_state[f"connection_{session_id}"] = connection_url
     st.text_area("Verified database understanding", value=knowledge, height=260, disabled=True)
     return info

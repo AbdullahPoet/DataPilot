@@ -18,7 +18,7 @@ def render_sidebar(database_path: Path) -> None:
 
     with st.sidebar:
         st.title("DataPilot")
-        if st.button("New Analytics", use_container_width=True):
+        if st.button("New Analytics", width="stretch"):
             st.session_state.active_session_id = None
             st.session_state.session_config = None
             st.session_state.page = "configuration"
@@ -37,7 +37,7 @@ def render_sidebar(database_path: Path) -> None:
                 title = str(session["title"])
                 session_columns = st.columns([5, 1])
                 with session_columns[0]:
-                    if st.button(title, key=f"open_{session_id}", use_container_width=True):
+                    if st.button(title, key=f"open_{session_id}", width="stretch"):
                         saved_session = get_session(database_path, session_id)
                         if saved_session is None:
                             st.error("This session is no longer available.")

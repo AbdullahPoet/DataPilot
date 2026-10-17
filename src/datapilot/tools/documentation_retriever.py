@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from html import unescape
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -35,10 +35,14 @@ class DocumentationSource:
 
 
 def _trusted_url(url: str, topic: str) -> bool:
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+        port = parsed.port
+    except ValueError:
+        return False
     if parsed.scheme != "https" or not parsed.hostname:
         return False
-    if parsed.username or parsed.password or parsed.port not in (None, 443):
+    if parsed.username or parsed.password or port not in (None, 443):
         return False
     if parsed.query and len(parsed.query) > 2048:
         return False
@@ -53,7 +57,13 @@ def _fetch_page(url: str, topic: str, timeout: float, max_bytes: int) -> str:
     if not _trusted_url(url, topic):
         raise DocumentationRetrievalError("Documentation URL is not trusted")
     request = Request(url, headers={"User-Agent": "DataPilotDocs/1.0", "Accept": "text/html"})
-    with urlopen(request, timeout=timeout) as response:
+    class TrustedRedirect(HTTPRedirectHandler):
+        def redirect_request(self, req: Request, fp: object, code: int, msg: str, headers: object, newurl: str) -> Request | None:
+            if not _trusted_url(newurl, topic):
+                raise DocumentationRetrievalError("Documentation redirect is outside trusted domains")
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    with build_opener(TrustedRedirect()).open(request, timeout=timeout) as response:
         final_url = response.geturl()
         if not _trusted_url(final_url, topic):
             raise DocumentationRetrievalError("Documentation redirected outside the trusted domains")

@@ -49,9 +49,10 @@ def _validate_data(frame: pd.DataFrame, plan: VisualizationPlan, max_rows: int) 
 
 
 def _render_matplotlib(data: pd.DataFrame, plan: VisualizationPlan, seaborn_mode: bool) -> Any:
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
 
-    figure, axes = plt.subplots()
+    figure = Figure()
+    axes = figure.subplots()
     try:
         chart = plan.chart_type
         x, y = plan.x, plan.y
@@ -92,7 +93,7 @@ def _render_matplotlib(data: pd.DataFrame, plan: VisualizationPlan, seaborn_mode
         figure.tight_layout()
         return figure
     except Exception:
-        plt.close(figure)
+        figure.clear()
         raise
 
 

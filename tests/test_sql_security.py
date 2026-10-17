@@ -10,13 +10,20 @@ from datapilot.validation.approval_manager import (
 from datapilot.validation.sql_validator import SQLValidationError, validate_sql
 
 
-@pytest.mark.parametrize("sql", [
-    "DELETE FROM sales", "SELECT * FROM sales; DROP TABLE sales",
-    "SELECT * INTO stolen FROM sales", "SELECT load_extension('evil')",
-    "SELECT writefile('file', 'data')", "SELECT unknown_udf()",
-    "WITH changed AS (DELETE FROM sales RETURNING *) SELECT * FROM changed",
-    "SELECT FROM", "SELECT pg_catalog.pg_read_file('/etc/passwd')",
-])
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "DELETE FROM sales",
+        "SELECT * FROM sales; DROP TABLE sales",
+        "SELECT * INTO stolen FROM sales",
+        "SELECT load_extension('evil')",
+        "SELECT writefile('file', 'data')",
+        "SELECT unknown_udf()",
+        "WITH changed AS (DELETE FROM sales RETURNING *) SELECT * FROM changed",
+        "SELECT FROM",
+        "SELECT pg_catalog.pg_read_file('/etc/passwd')",
+    ],
+)
 def test_reject_unsafe_sql(sql: str) -> None:
     with pytest.raises(SQLValidationError):
         validate_sql(sql, "sqlite")
@@ -25,8 +32,11 @@ def test_reject_unsafe_sql(sql: str) -> None:
 def test_sql_approval_and_readonly_execution(session: tuple[Path, str], source: str) -> None:
     database, session_id = session
     options = {
-        "connection_url": source, "approval_database_path": database,
-        "session_id": session_id, "source_id": "sales", "sql": "SELECT SUM(amount) AS total FROM sales",
+        "connection_url": source,
+        "approval_database_path": database,
+        "session_id": session_id,
+        "source_id": "sales",
+        "sql": "SELECT SUM(amount) AS total FROM sales",
     }
     with pytest.raises(SQLApprovalRequired):
         execute_sql(**options)
@@ -47,4 +57,3 @@ def test_rejection_survives_source_approval(session: tuple[Path, str]) -> None:
         request_execution_approval(database, session_id, "sales", query)
         decide_execution_approval(database, session_id, "sales", query, decision)
     assert request_execution_approval(database, session_id, "sales", "SELECT 1") == "rejected"
-

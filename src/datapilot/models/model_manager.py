@@ -2,7 +2,7 @@ import json
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -66,15 +66,30 @@ def _parse_response(data: object, provider: str) -> str:
     if provider == "ollama":
         message = data.get("message")
         content = message.get("content") if isinstance(message, dict) else None
+        if not content and isinstance(message, dict) and message.get("thinking"):
+            raise ModelRequestError(
+                "Model returned reasoning without a final answer; disable reasoning when supported or select a model that can complete structured responses"
+            )
     elif provider == "Anthropic (Claude)":
         blocks = data.get("content")
-        content = "\n".join(
-            block["text"] for block in blocks
-            if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str)
-        ) if isinstance(blocks, list) else None
+        content = (
+            "\n".join(
+                block["text"]
+                for block in blocks
+                if isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            )
+            if isinstance(blocks, list)
+            else None
+        )
     else:
         choices = data.get("choices")
-        message = choices[0].get("message") if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
+        message = (
+            choices[0].get("message")
+            if isinstance(choices, list) and choices and isinstance(choices[0], dict)
+            else None
+        )
         content = message.get("content") if isinstance(message, dict) else None
     if not isinstance(content, str) or not content.strip():
         raise ModelRequestError("Model returned no text content")
@@ -87,14 +102,34 @@ def invoke_model(
     *,
     max_output_tokens: int = 2048,
     timeout: float = 60.0,
+    json_output: bool = False,
+    response_schema: Mapping[str, Any] | None = None,
 ) -> ModelResponse:
     load_dotenv()
+    configured_timeout = configuration.get("request_timeout")
+    if configured_timeout is not None:
+        if isinstance(configured_timeout, bool) or not isinstance(configured_timeout, int):
+            raise TypeError("Configured model timeout must be an integer")
+        if not 1 <= configured_timeout <= 600:
+            raise ValueError("Configured model timeout must be between 1 and 600 seconds")
+        timeout = float(configured_timeout)
     if not messages or max_output_tokens <= 0 or timeout <= 0:
         raise ValueError("Messages, output token limit, and timeout must be valid")
     provider = str(configuration["provider"])
     model = str(configuration["model"])
     if not model.strip():
         raise ValueError("Model identifier is required")
+    context_window = int(configuration.get("context_window", 35000))
+    schema_size = len(json.dumps(response_schema).encode()) if response_schema is not None else 0
+    if (
+        sum(len(message.content.encode("utf-8")) + 16 for message in messages)
+        + max_output_tokens
+        + schema_size
+        >= context_window * 0.85
+    ):
+        raise ValueError(
+            "Request exceeds the conservative context budget; reduce source knowledge or selected skills"
+        )
     endpoint = _endpoint(configuration)
     headers = {"Content-Type": "application/json"}
     chat = [{"role": message.role, "content": message.content} for message in messages]
@@ -106,8 +141,19 @@ def invoke_model(
             "model": model,
             "messages": chat,
             "stream": False,
-            "options": {"temperature": 0, "num_ctx": context_window, "num_predict": max_output_tokens},
+            "options": {
+                "temperature": 0,
+                "num_ctx": context_window,
+                "num_predict": max_output_tokens,
+            },
         }
+        if "think" in configuration:
+            thinking = configuration["think"]
+            if not isinstance(thinking, (bool, str)):
+                raise TypeError("Ollama thinking mode must be a boolean or supported mode name")
+            payload["think"] = thinking
+        if json_output or response_schema is not None:
+            payload["format"] = dict(response_schema) if response_schema is not None else "json"
     else:
         secret_name = str(configuration.get("credential_env_var", ""))
         if not secret_name:
@@ -118,7 +164,9 @@ def invoke_model(
         if provider == "Anthropic (Claude)":
             headers["x-api-key"] = api_key
             headers["anthropic-version"] = "2023-06-01"
-            system_text = "\n".join(message.content for message in messages if message.role == "system")
+            system_text = "\n".join(
+                message.content for message in messages if message.role == "system"
+            )
             payload = {
                 "model": model,
                 "messages": [message for message in chat if message["role"] != "system"],
@@ -129,15 +177,28 @@ def invoke_model(
                 payload["system"] = system_text
         else:
             headers["Authorization"] = f"Bearer {api_key}"
-            payload = {"model": model, "messages": chat, "max_tokens": max_output_tokens, "temperature": 0}
-    request = Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+            payload = {
+                "model": model,
+                "messages": chat,
+                "max_tokens": max_output_tokens,
+                "temperature": 0,
+            }
+    request = Request(
+        endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST"
+    )
     try:
         with urlopen(request, timeout=timeout) as response:
             response_data = json.load(response)
     except HTTPError as error:
         raise ModelRequestError(f"Model API returned HTTP {error.code}") from error
-    except (URLError, TimeoutError, OSError) as error:
+    except TimeoutError as error:
+        raise ModelRequestError(
+            "Selected model request timed out; check model loading, runtime capacity, or increase the model request timeout"
+        ) from error
+    except (URLError, OSError) as error:
         raise ModelRequestError("Unable to reach the selected model endpoint") from error
     except (ValueError, UnicodeError) as error:
         raise ModelRequestError("Model API returned invalid JSON") from error
-    return ModelResponse(content=_parse_response(response_data, provider), model=model, provider=provider)
+    return ModelResponse(
+        content=_parse_response(response_data, provider), model=model, provider=provider
+    )

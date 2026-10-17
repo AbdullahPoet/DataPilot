@@ -4,13 +4,16 @@ from typing import Literal
 
 from datapilot.agents.documentation_agent import DocumentationDecision, assess_documentation_need
 from datapilot.tools.cloud_search import (
+    NativeSearchError,
     NativeSearchUnavailable,
     native_search_supported,
     search_with_cloud_model,
 )
 from datapilot.tools.documentation_retriever import (
     OFFICIAL_DOMAINS,
+    DocumentationRetrievalError,
     DocumentationSource,
+    _trusted_url,
     retrieve_documentation,
 )
 
@@ -76,13 +79,16 @@ def search_documentation(
         return SearchOrchestrationResult("not_needed", decision, provider, "", (), False, decision.reason)
 
     if provider == "ollama":
-        sources = retrieve_documentation(
-            query=decision.search_query,
-            topic=topic,
-            max_results=max_results,
-            max_characters=max_context_characters,
-            timeout=min(timeout, 30.0),
-        )
+        try:
+            sources = retrieve_documentation(
+                query=decision.search_query,
+                topic=topic,
+                max_results=max_results,
+                max_characters=max_context_characters,
+                timeout=min(timeout, 30.0),
+            )
+        except DocumentationRetrievalError as error:
+            return SearchOrchestrationResult("unavailable", decision, provider, "", (), False, str(error))
         context = _format_local_sources(sources, max_context_characters)
         if not sources or not context:
             return SearchOrchestrationResult("unavailable", decision, provider, "", (), False, "No official documentation could be retrieved")
@@ -103,13 +109,19 @@ def search_documentation(
             configuration=model_configuration,
             timeout=timeout,
         )
-    except NativeSearchUnavailable as error:
+    except (NativeSearchUnavailable, NativeSearchError) as error:
         return SearchOrchestrationResult("unavailable", decision, provider, "", (), False, str(error))
 
     if not response.search_confirmed:
         return SearchOrchestrationResult(
             "unavailable", decision, provider, "", response.source_urls, False,
             "Provider did not confirm that native web search was performed",
+        )
+
+    if not response.source_urls or any(not _trusted_url(url, topic) for url in response.source_urls):
+        return SearchOrchestrationResult(
+            "unavailable", decision, provider, "", (), False,
+            "Native search did not supply exclusively official documentation sources",
         )
     context = (
         "Native web search answer (untrusted; verify against official documentation):\n"

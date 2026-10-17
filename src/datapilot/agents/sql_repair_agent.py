@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from datapilot.agents.sql_agent import SUPPORTED_DIALECTS, SQLDialect
 from datapilot.models.model_manager import ChatMessage, invoke_model
+from datapilot.models.response_schemas import SQL_REPAIR
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +95,8 @@ def repair_sql(
         [ChatMessage(role="system", content=system_prompt), ChatMessage(role="user", content=user_prompt)],
         max_output_tokens=max_output_tokens,
         timeout=timeout,
+        json_output=True,
+        response_schema=SQL_REPAIR,
     )
     sql, explanation, changes = _parse_repair_response(response.content, original_sql)
     return SQLRepairResult(

@@ -119,7 +119,10 @@ def save_verified_skill(
     _validate_verifications(verifications)
     root = Path(skills_directory).resolve()
     root.mkdir(parents=True, exist_ok=True)
-    destination_directory = root / f"{family}_skills" / skill.name
+    family_directory = root / f"{family}_skills"
+    if family_directory.is_symlink() or family_directory.resolve() != family_directory:
+        raise ValueError("Model skill directory must not be a symbolic link")
+    destination_directory = family_directory / skill.name
     if destination_directory.is_symlink():
         raise ValueError("Skill destination must not be a symbolic link")
     destination_directory.mkdir(parents=True, exist_ok=True)

@@ -40,7 +40,7 @@ def file_knowledge_cache_path(
         raise ValueError("An Excel worksheet must be selected")
     fingerprint = _file_fingerprint(source)
     identifier = hashlib.sha256(
-        f"{extension}:{fingerprint}:{sheet_name or ''}".encode("utf-8")
+        f"{extension}:{fingerprint}:{sheet_name or ''}".encode()
     ).hexdigest()
     return knowledge_directory / identifier / "profile.md"
 

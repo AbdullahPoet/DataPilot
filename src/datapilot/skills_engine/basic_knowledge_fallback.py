@@ -6,6 +6,7 @@ from typing import Literal
 
 from datapilot.agents.sql_agent import SQLDialect, SQLGenerationResult, generate_sql
 from datapilot.models.model_manager import ChatMessage, invoke_model
+from datapilot.models.response_schemas import SQL_FALLBACK
 
 KnowledgeStatus = Literal["ready", "needs_basic_knowledge", "unanswerable"]
 
@@ -113,6 +114,8 @@ def generate_sql_with_basic_fallback(
         [ChatMessage(role="system", content=system_prompt), ChatMessage(role="user", content=user_prompt)],
         max_output_tokens=max_output_tokens,
         timeout=timeout,
+        json_output=True,
+        response_schema=SQL_FALLBACK,
     )
     assessment = _parse_assessment(response.content)
     status = assessment["status"]
