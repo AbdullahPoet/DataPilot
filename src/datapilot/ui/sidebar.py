@@ -18,15 +18,31 @@ def render_sidebar(database_path: Path) -> None:
 
     with st.sidebar:
         st.html(
-            "<style>.st-key-navigation_brand img {"
-            "height: 80px; object-fit: cover; object-position: center;"
-            "}</style>"
+            """
+            <div aria-label="DataPilot" style="display:flex;align-items:center;
+                gap:10px;margin:8px 0 20px;background:transparent;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"
+                    width="36" height="36" aria-hidden="true" style="flex-shrink:0;">
+                    <defs>
+                        <linearGradient id="datapilot-blue" x2="0.7" y2="1">
+                            <stop stop-color="#065cff"/>
+                            <stop offset="1" stop-color="#00216e"/>
+                        </linearGradient>
+                        <mask id="datapilot-plane">
+                            <rect width="64" height="64" fill="white"/>
+                            <path d="M0 34 43 17Q49 15 47 22L34 64H24L35 30
+                                18 38 8 34 0 43Z" fill="black"/>
+                        </mask>
+                    </defs>
+                    <path d="M5 4H30C69 4 69 60 30 60H4V49L17 36 5 32Z"
+                        fill="url(#datapilot-blue)" mask="url(#datapilot-plane)"/>
+                </svg>
+                <span style="font-size:28px;font-weight:700;letter-spacing:-1px;
+                    line-height:1.2;white-space:nowrap;">Data<span
+                    style="color:#065cff;">Pilot</span></span>
+            </div>
+            """
         )
-        with st.container(key="navigation_brand"):
-            st.image(
-                Path(__file__).parent / "assets" / "navigation_logo.png",
-                width="stretch",
-            )
         if st.button("New Analytics", width="stretch"):
             st.session_state.active_session_id = None
             st.session_state.session_config = None
