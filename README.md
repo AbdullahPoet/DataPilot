@@ -97,6 +97,20 @@ Select **New Analytics → SQL → Create Analytics Session**, then choose the *
 | PostgreSQL | Host (`localhost` or the server address), port (default `5432`), database name, username, and password. |
 | MySQL | Host (`localhost` or the server address), port (default `3306`), database name, username, and password. |
 
+Example values for the connection form (replace them with your own database details):
+
+| Field | SQLite | PostgreSQL | MySQL |
+| --- | --- | --- | --- |
+| Database type | `SQLite` | `PostgreSQL` | `MySQL` |
+| Existing database file path | `D:\Data\sales.db` | Not applicable | Not applicable |
+| Host | Not applicable | `localhost` | `localhost` |
+| Port | Not applicable | `5432` | `3306` |
+| Database name | Not applicable | `sales_db` | `sales_db` |
+| Username | Not applicable | `analytics_reader` | `analytics_reader` |
+| Password | Not applicable | Your account password | Your account password |
+
+The SQLite file must already exist. For PostgreSQL/MySQL, `sales_db` and the `analytics_reader` account must already exist, with permission to read the tables; DataPilot does not create them.
+
 Click **Connect and load schema**. Once the connection succeeds, configure and save a model to start asking questions. PostgreSQL/MySQL servers must be running and reachable; use an account with read-only access to the required tables. After restarting DataPilot, reconnect to resume database execution.
 
 ### Local models
