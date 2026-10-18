@@ -15,11 +15,13 @@
 
 ### Agentic Data Analytics Workbench
 
-I built DataPilot to bring questions, queries, results, and reports into one workspace. I can connect a SQL database or load a CSV/XLSX file, ask a question in plain English, review the proposed analysis, and turn the result into a chart or PDF report.
+DataPilot brings questions, queries, results, dashboards, and reports into one workspace. Connect a SQL database, load a CSV/XLSX file, or join several files; ask a question in plain English; review the proposed analysis; and explore the answer through tables, charts, KPI cards, and PDF reports.
 
-My focus is on keeping the analysis inspectable: generated SQL and file operations go through validation, execution starts behind an approval step, and sessions keep their results and history on disk. I can use an installed Ollama model or explicitly choose a cloud provider.
+Each saved answer includes evidence of how it was calculated. SQL and file operations pass validation, execution starts behind approval, and sessions retain results and history on disk. Repeated successful queries can supply examples for future analyses, with feedback and controls to disable or clear learning. Use an installed Ollama model or explicitly choose a cloud provider.
 
-[Quick start](#quick-start) · [Features](#features) · [Configuration](#configuration) · [How it works](#how-it-works) · [Verification](#verification) · [Project structure](#project-structure)
+[Quick start](#quick-start) · [Features](#features) · [Multi-file joins](#multi-file-joins) · [Answer evidence](#answer-evidence) · [Dashboards](#dashboards) · [Repeated-query learning](#repeated-query-learning) · [Configuration](#configuration) · [Verification](#verification)
+
+The `develop` branch includes multi-file joins, answer evidence, persistent dashboards, and repeated-query learning. The latest recorded regression is **156 passed, 15 skipped**; see [Verification](#verification) for coverage and unavailable live services.
 
 ## Workbench preview
 
@@ -81,29 +83,73 @@ Open the local URL printed by Streamlit.
 ### Run an analysis
 
 1. Select **New Analytics**.
-2. Choose a database connection or load a CSV/XLSX file.
+2. Choose a database connection, load a CSV/XLSX file, or select **Combine multiple files** in a file session.
 3. Configure and save the model for that session.
 4. Ask a question, such as “What is the total amount by region?”
 5. Review the generated SQL or file operation plan and approve or reject it.
-6. Explore the result, generate a chart, or export a PDF report.
+6. Open **Answer evidence** to inspect the calculation, assumptions, source version, and returned row count.
+7. Generate a chart, pin charts or KPIs to the session dashboard, or export a PDF report.
 
-Approval covers subsequent validated, read-only analyses of the same source in that session. Changed file contents require fresh approval. A rejected request remains rejected.
+Approval covers subsequent validated, read-only analyses of the same source in that session. Changed file contents, join configuration, or database schema produce a new source version and require fresh approval. Plans with model-reported assumptions also require review. A rejected request remains rejected. Pending approvals must resume with the original source and model endpoint.
 
-### Combine files, inspect evidence, and build a dashboard
+## Multi-file joins
 
-In a CSV or XLSX session, select **Combine multiple files**. Upload mixed CSV/XLSX files or enter local paths, choose a worksheet for each workbook, and give each source a unique alias. Files join in the displayed order using one key per pair. Choose a left or inner join and the expected key relationship. Review duplicate keys, unmatched rows, output counts, and the preview, then select **Save joined data source**. Columns are qualified as `orders.amount` or `customers.region`. Null keys never match; many-to-many relationships must be selected explicitly. Each input and intermediate join is limited to 1,000,000 rows. File contents, worksheets, aliases, and join choices form the source version and its approval boundary.
+Combine files such as `orders.csv` and `customers.xlsx` to answer questions about orders by customer region.
 
-Open **Answer evidence** below a saved result to inspect its question, executed SQL or file operations, model explanation, assumptions, source version, and returned row count. SQL evidence records a schema fingerprint; database rows remain live rather than a reproducible database snapshot. Plans with model-reported assumptions require review even after the source was approved. Reject incorrect assumptions and ask again, using **Definitions or clarification** to specify business meanings. The app cannot guarantee detection of every ambiguous question. Older results may have no detailed evidence.
+1. Create or reopen a CSV or XLSX session and select **Combine multiple files**.
+2. Upload two to eight CSV/XLSX files, or enter local paths, one per line. Mixed file types are supported.
+3. Choose a worksheet for each workbook and a unique alias for each source, such as `orders` and `customers`.
+4. For each additional file, select its join keys, a **left** or **inner** join, and the expected relationship: many-to-one, one-to-one, one-to-many, or many-to-many.
+5. Review the duplicate-key counts, unmatched rows, output counts, and preview, then select **Save joined data source**.
 
-Use **Pin KPI to dashboard** to choose a numeric aggregation or a count of saved result rows. Create a chart, open **Saved charts**, and select **Pin chart to dashboard**. Cards persist in the session and support reordering and removal. Shared equality filters apply to columns common to all card results, comparing their displayed string values, with an explicit missing-value option. Filters act after the underlying analysis and aggregation; they do not change its SQL or file plan. Truncated inputs to cards are labeled.
+Files join in the displayed order using one key per pair. Columns use qualified names such as `orders.amount` and `customers.region`. Null keys never match. Many-to-many relationships require explicit selection because they can multiply rows and amounts. Relationship checks reject unexpected duplicate keys, and output size is checked before merging. Each input and intermediate join is limited to 1,000,000 rows.
 
-**Refresh dashboard analyses** reruns each distinct pinned question against the currently configured source and model, keeping existing validation and approval safeguards. Questions shared by several cards run once. A pending approval pauses the saved refresh queue, which can resume after an application restart. Rejecting approval or a failed analysis stops the queue and retains that question's previous cards. Earlier completed questions in the same refresh may already have updated their cards. Reconnect SQL sources before refreshing. **Cancel dashboard refresh** cancels queued work; any pending analytical approval must still be approved or rejected separately.
+File contents, worksheets, aliases, and join choices form the source version. Changing any of them requires fresh approval before analytical execution.
 
-### Learning from repeated queries
+## Answer evidence
 
-Learning is enabled by default per session. After two distinct, successful, non-truncated executions of the same question and exact SQL/file operations, the example becomes eligible as bounded context for that repeated question. Only whitespace is normalized. Examples are isolated by session, source version, schema/profile, provider, model identifier, and endpoint. Each request still generates and validates a plan, applies approval rules, and executes against current data.
+Open **Answer evidence** below a saved result to inspect:
 
-This is local example retrieval, not model-weight training or automatic promotion into verified skills. Execution success does not establish analytical correctness. Mark an analysis **Incorrect** to exclude its example, or **Useful** to update its feedback. **Forget learned examples** removes the session's examples without deleting results or allowing checkpoint replay to relearn old results. Disable learning to stop both recording and reuse. Model-generated Python is never executed. With a cloud model, eligible examples become part of the context sent to that selected provider.
+- The original question and the model's planning explanation and assumptions.
+- The executed SQL or structured file operations, including filters and aggregations.
+- Source fingerprints, file row counts, and join diagnostics where applicable.
+- The model/provider, execution attempts, returned row count, and truncation status.
+
+Treat the model explanation as something to check against the executed calculation. SQL evidence records a schema fingerprint; live database contents are not saved as a reproducible source snapshot. Older results may lack detailed evidence.
+
+Plans with model-reported assumptions require review even after source approval. Reject incorrect assumptions and ask again, using **Definitions or clarification** to specify meanings such as whether “revenue” includes discounts. The app cannot guarantee detection of every ambiguous question.
+
+## Dashboards
+
+Build a persistent dashboard inside each analytics session:
+
+1. Open **Pin KPI to dashboard** below a result. Choose a title and calculation: sum, mean, minimum, maximum, or count. Numeric calculations require a numeric column; count counts saved result rows.
+2. To pin a chart, create it, open **Saved charts**, and select **Pin chart to dashboard**. Older chart artifacts without a saved visualization plan must be recreated first.
+3. Use **Move up** or **Remove card** to arrange up to 24 cards.
+4. Under **Shared filters**, select a column common to all card results, choose values, optionally include missing values, and select **Apply shared filter**. Use **Clear shared filters** to reset them.
+
+Cards calculate from saved results. Shared equality filters compare displayed string values and act **after aggregation**; they do not change the underlying SQL or file plan. Cards using truncated results display a warning because their values may be incomplete.
+
+### Refresh and recovery
+
+Select **Refresh dashboard analyses** to rerun each distinct pinned question against the currently configured source and model. Questions shared by several cards run once. Refresh uses the normal validation and approval safeguards; reconnect SQL sources first.
+
+A pending approval pauses the persisted refresh queue, which can resume after an application restart. Rejecting approval, a failed analysis, or an incompatible result stops the queue and retains that question's previous cards. Earlier completed questions may already have updated their cards. **Cancel dashboard refresh** cancels queued work; any pending analytical approval must still be approved or rejected separately.
+
+## Repeated-query learning
+
+DataPilot learns from repeated queries by saving successful execution examples locally. Learning is enabled by default per session. After **two distinct, successful, non-truncated executions** of the same question and exact SQL/file operations, that example becomes eligible as bounded context for the repeated question. Only whitespace is normalized; paraphrases and changed parameters do not automatically match.
+
+Examples remain isolated by session, source version, schema/profile, provider, model identifier, and endpoint. Every new request still generates and validates a plan, applies approval rules, and executes against current data. Execution success alone does not establish analytical correctness, and this feature does not update model weights or promote examples into verified skills.
+
+| Control | Behavior |
+| --- | --- |
+| **Learn from successful repeated queries** | Disable to stop both recording and reuse for the session. |
+| **Useful analysis** | Record positive feedback for an eligible saved example. |
+| **Incorrect analysis — exclude from learning** | Exclude that question/plan example from future learning. |
+| **Forget learned examples** | Remove the session's learned examples while preserving results. Replay receipts prevent old checkpoints from immediately relearning them. |
+
+Feedback controls appear on results with a recorded learning example. Model-generated Python is never executed. When using a cloud model, eligible examples become part of the context sent to the selected provider.
 
 ## Configuration
 
@@ -175,29 +221,37 @@ Documentation retrieval runs when the model requests it. Local-model retrieval u
 
 | Path | Contents |
 | --- | --- |
-| `storage/app.db` | Sessions, approvals, result references, and conversation memory |
+| `storage/app.db` | Sessions, approvals, result references, answer evidence, conversation memory, dashboard cards/filters/refresh queues, learning examples/preferences, and replay receipts |
 | `storage/checkpoints.db` | LangGraph workflow checkpoints |
-| `sessions/<session_id>/` | Uploaded sources, checksummed result files, and chart artifacts |
+| `sessions/<session_id>/` | Uploaded single/joined source files, checksummed results, and chart artifacts with saved visualization plans |
 | `storage/reports/<session_id>/` | Generated PDF reports |
 | `storage/logs/<session_id>/` | Successful SQL execution logs |
 | `skills/` | Shared SQL references and isolated model-family skills |
 
 Set `DATAPILOT_HOME` to use a separate application working directory. That directory must contain `skills/`; runtime storage and session directories are created there.
 
-Local-first refers to application storage and the option to run inference locally. Selecting a cloud model sends questions, source schemas or file profiles, selected skills, and relevant analytical history to that provider. Documentation queries and requested page URLs are sent to the search service when used. Database passwords remain in the active Streamlit session and are not persisted in application configuration or checkpoints. After restarting, reconnect to resume database execution; saved artifacts remain available.
+Local-first refers to application storage and the option to run inference locally. Selecting a cloud model sends questions, source schemas or file profiles, selected skills, relevant analytical history, and eligible repeated-query examples to that provider. Documentation queries and requested page URLs are sent to the search service when used. Database passwords remain in the active Streamlit session and are not persisted in application configuration or checkpoints. After restarting, reconnect to resume database execution; saved artifacts and dashboards remain available.
 
 ## How it works
 
 ```mermaid
 flowchart TD
-    A[Question and source context] --> B[Selected model]
+    S[SQL database or CSV/XLSX files] --> P[Verified schema or file profile]
+    J[Explicit file joins and key diagnostics] --> P
+    P --> A[Question and source context]
+    A --> B[Selected model]
     C[Relevant skills and documentation] -.-> B
+    L[Scoped repeated-query examples] -.-> B
     B --> D[SQL query or structured file plan]
     D --> E[Validation]
-    E --> F[Session approval]
+    E --> F[Source approval and assumption review]
     F --> G[Controlled execution]
     G --> H[Saved results]
+    H --> V[Answer evidence]
     H --> I[Charts and PDF reports]
+    H --> K[Dashboard charts and KPIs]
+    H --> R[Repeated execution eligibility and feedback]
+    R -.-> L
 ```
 
 I use LangGraph to coordinate the workflow and SQLite checkpoints to restore its state, including pending approvals. Older conversation history is compacted in bounded batches and reconstructed with summaries, recent turns, and result references. Context accounting uses a conservative UTF-8 estimate; requests that exceed the budget fail explicitly.
@@ -211,21 +265,24 @@ SQL references live in `skills/easy`, `skills/mid`, `skills/hard`, and `skills/d
 - SQL repair is limited to three attempts. Every repaired query is validated again; connection, permission, and timeout errors do not trigger speculative repair.
 - File plans compile to allowlisted operations. DataPilot never executes arbitrary model-generated Python.
 - Results, approvals, reports, and memory are scoped to their session and source identity. Truncated results are marked in the UI and reports.
+- Joins enforce selected key relationships and reject excessive output before merging. File changes are checked before execution and result storage.
+- Model-reported assumptions require explicit review. Pending approvals remain bound to the original source and model endpoint.
+- Learning supplies scoped examples to planning; it never bypasses validation, approval, or execution. Negative feedback excludes examples, and replay receipts preserve the effect of forgetting them.
+- Dashboard refresh keeps prior cards when that question fails, is rejected, or produces incompatible data.
 
 ## Verification
 
 I keep offline regression checks separate from live service checks. Fixture-based model tests establish integration behavior; they do not establish a real model's capabilities.
 
-The October 18, 2026 `develop` feature regression reports **156 passed, 15 skipped**. Ruff, installed-package compatibility, lockfile validation, packaged-module imports, wheel/source builds, and the application health check pass. The skips require live services or credentials; Ollama was unreachable during this run. See the [workbench feature delivery](docs/WORKBENCH_FEATURES.md) for joins, evidence, dashboards, learning, and their boundaries. The table below preserves the earlier live verification evidence.
-
-The results below reflect verification on October 17, 2026.
+The latest recorded `develop` regression ran on **October 18, 2026**: **156 passed, 15 skipped**. Skips require live services or credentials; Ollama was unreachable during that run. Earlier live evidence is dated separately below.
 
 | Coverage | Verified scope |
 | --- | --- |
-| Offline/application regression | Latest full run: **134 passed, 15 skipped**; the skipped checks require opt-in live-service configuration. |
-| Real local-model analytics | SQL, CSV, and XLSX workflows passed with `qwen3.5:4b`. |
-| Live documentation | All five live Tavily/Qwen checks passed: search, extraction, SQLite/Pandas retrieval, and model-triggered retrieval. The combined documentation run was **19 passed**. |
-| Latest sidebar change | Both existing Streamlit interaction tests and Ruff passed. |
+| Offline/application regression — October 18 | **156 passed, 15 skipped**, including SQL security, chart/PDF generation, and the real application server health check. |
+| New workbench features — October 18 | Mixed CSV/XLSX joins, evidence restoration, learning isolation/feedback/forgetting, assumption review, dashboard filters/pinning/refresh/recovery, and Streamlit interactions passed with fixture model responses and real downstream execution. |
+| Packaging and dependencies — October 18 | Ruff, dependency compatibility, lockfile validation, wheel/source builds, and imports of all packaged backend modules passed. |
+| Real local-model analytics — October 17 | SQL, CSV, and XLSX workflows passed with `qwen3.5:4b`. New workbench features have not been verified with a live model in the October 18 run. |
+| Live documentation — October 17 | Five live Tavily/Qwen checks passed: search, extraction, SQLite/Pandas retrieval, and model-triggered retrieval. The combined documentation run was **19 passed**. |
 | Cloud models and external databases | Real cloud inference/native search and PostgreSQL/MySQL analytical workflows remain unverified in this environment. |
 
 Run the standard checks:
@@ -234,7 +291,14 @@ Run the standard checks:
 uv run --locked ruff check src app.py streamlit_app.py tests
 uv run --locked pytest -q -rs
 uv pip check
+uv lock --check
 uv build
+```
+
+For a focused run covering the new workbench features and application/UI integration:
+
+```powershell
+uv run --locked pytest tests/test_workbench_features.py tests/test_application.py tests/test_streamlit.py -q
 ```
 
 For real Ollama integration checks, select an installed model:
@@ -255,7 +319,7 @@ Cloud checks require the provider credential and its matching explicit test mode
 
 Database checks accept `DATAPILOT_TEST_POSTGRES_URL` (`postgresql+psycopg://...`) or `DATAPILOT_TEST_MYSQL_URL` (`mysql+pymysql://...`). Those external checks run `SELECT 1`; a successful connection check does not replace an analytical workflow test for a deployment.
 
-Full evidence and remaining limitations are recorded in the [implementation audit](docs/IMPLEMENTATION_AUDIT.md).
+Feature details and limits are recorded in the [workbench feature delivery](docs/WORKBENCH_FEATURES.md); earlier backend and live-service evidence is in the [implementation audit](docs/IMPLEMENTATION_AUDIT.md).
 
 ## Project structure
 
@@ -265,11 +329,12 @@ DataPilot/
 ├── streamlit_app.py       # Streamlit entry point
 ├── src/datapilot/
 │   ├── agents/            # Analysis planning and structured generation
+│   ├── ingestion/         # File loading, profiling, and bounded joins
 │   ├── models/            # Model adapters and configuration
-│   ├── persistence/       # Session storage and result restoration
-│   ├── skills_engine/     # Skill selection and SQL knowledge fallback
+│   ├── persistence/       # Sessions, results, evidence, and dashboards
+│   ├── skills_engine/     # Skills, SQL fallback, and repeated-query examples
 │   ├── tools/             # Documentation retrieval and search
-│   └── ui/                # Sidebar, configuration, and analysis workspace
+│   └── ui/                # Configuration, joins, evidence, and dashboard UI
 ├── skills/                # SQL references and model-family knowledge
 ├── tests/                 # Regression, security, UI, and live checks
 ├── docs/                  # Audit, changed-file manifest, and README images
@@ -281,7 +346,15 @@ DataPilot/
 
 I currently treat DataPilot as a local workbench. Multi-user authentication, remote deployment isolation, and a complete dependency vulnerability audit are outside the verified release scope.
 
-File analysis is limited to the supported operation vocabulary. PDF previews support up to 10 columns, default to 100 rows, and embed at most 12 associated PNG/JPEG charts. Interactive HTML charts are separate downloads. Default report fonts do not establish full multilingual typography support.
+| Area | Current boundary |
+| --- | --- |
+| File analysis | Filter, select, groupby, sort, and limit operations with allowlisted aggregations. |
+| Joins | Two to eight CSV/XLSX files; left/inner joins; one key per pair; at most 1,000,000 rows per input/intermediate result. Database-to-file joins are not provided by this feature. |
+| Dashboards | Up to 24 cards per session. Shared filters act on saved result rows after aggregation. Refresh is explicit and can partially complete across distinct questions. |
+| Evidence | SQL fingerprints schemas rather than database contents. Ambiguity review depends on model-reported assumptions and user clarification. Older artifacts may lack evidence or visualization plans. |
+| Learning | Reuses exact repeated-question/plan examples within a session/source/model scope. No model-weight training, automatic paraphrase matching, or independently established answer correctness. |
+| PDF reports | At most 10 columns, 100 preview rows by default, and 12 associated PNG/JPEG charts. Interactive HTML charts remain separate downloads; full multilingual typography is unverified. |
+| External integrations | New features have offline integration coverage; live model behavior and external database deployments require their own verification. |
 
 ## Contributing
 
