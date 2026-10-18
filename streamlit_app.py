@@ -11,6 +11,7 @@ from datapilot.persistence.session_repository import create_session
 from datapilot.persistence.sqlite_manager import open_database
 from datapilot.ui.analytics_workspace import render_analytics
 from datapilot.ui.connection_form import render_connection_form
+from datapilot.ui.join_workspace import render_join_workspace
 from datapilot.ui.sidebar import render_sidebar
 
 PROJECT_ROOT = Path(os.environ.get("DATAPILOT_HOME", Path(__file__).resolve().parent)).resolve()
@@ -71,6 +72,18 @@ def render_file_workspace(configuration: dict[str, object], source_type: str) ->
         return
 
     st.subheader(f"{source_type.upper()} Data Source")
+    if st.checkbox(
+        "Combine multiple files",
+        value=bool(configuration.get("files")),
+        key=f"combine_{session_id}",
+    ):
+        updated_join = render_join_workspace(PROJECT_ROOT, session_id, configuration)
+        if updated_join:
+            save_source_configuration(session_id, updated_join)
+            st.session_state.session_config = updated_join
+            st.success("Joined data source saved. New source versions require fresh approval.")
+            st.rerun()
+        return
     saved_path = configuration.get("file_path")
     saved_sheet = configuration.get("sheet_name")
     if configuration.get("source_configured"):
@@ -169,6 +182,8 @@ def render_file_workspace(configuration: dict[str, object], source_type: str) ->
         "file_path": str(persistent_path),
         "sheet_name": sheet_name,
     }
+    updated.pop("files", None)
+    updated.pop("joins", None)
     try:
         save_source_configuration(session_id, updated)
     except (OSError, LookupError, ValueError, TypeError) as error:

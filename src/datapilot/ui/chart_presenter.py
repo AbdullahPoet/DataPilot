@@ -18,7 +18,9 @@ def _streamlit_client(client: Any | None) -> Any:
     return st
 
 
-def present_chart(chart: RenderedChart, *, client: Any | None = None) -> None:
+def present_chart(
+    chart: RenderedChart, *, client: Any | None = None, key: str | None = None
+) -> None:
     if not isinstance(chart, RenderedChart):
         raise ChartPresentationError("A RenderedChart is required")
     if chart.row_count < 1:
@@ -35,14 +37,16 @@ def present_chart(chart: RenderedChart, *, client: Any | None = None) -> None:
 
         if not isinstance(chart.figure, Figure):
             raise ChartPresentationError("Invalid Plotly figure")
-        st.plotly_chart(chart.figure, width="stretch")
+        st.plotly_chart(chart.figure, width="stretch", key=key)
     elif chart.library == "bokeh":
         from bokeh.models import Model
 
         if not isinstance(chart.figure, Model):
             raise ChartPresentationError("Invalid Bokeh model")
         if not callable(getattr(st, "bokeh_chart", None)):
-            raise ChartPresentationError("Installed Streamlit version does not support Bokeh charts")
+            raise ChartPresentationError(
+                "Installed Streamlit version does not support Bokeh charts"
+            )
         st.bokeh_chart(chart.figure, use_container_width=True)
     else:
         raise ChartPresentationError("Unsupported chart library")
@@ -57,7 +61,11 @@ def present_saved_chart(
 ) -> None:
     if not isinstance(artifact, ChartArtifact):
         raise ChartPresentationError("A ChartArtifact is required")
-    if not isinstance(max_file_bytes, int) or isinstance(max_file_bytes, bool) or max_file_bytes < 1:
+    if (
+        not isinstance(max_file_bytes, int)
+        or isinstance(max_file_bytes, bool)
+        or max_file_bytes < 1
+    ):
         raise ChartPresentationError("max_file_bytes must be positive")
     root = Path(artifacts_directory).resolve(strict=True)
     chart_directory = root / artifact.session_id / "charts"
@@ -100,7 +108,9 @@ def present_saved_chart(
             raise ChartPresentationError("Invalid PNG artifact")
         st.image(data, caption=metadata.get("title", "Saved chart"), width="stretch")
     else:
-        st.info("Interactive HTML charts are available as downloads, not embedded in the application.")
+        st.info(
+            "Interactive HTML charts are available as downloads, not embedded in the application."
+        )
         st.download_button(
             label="Download interactive chart",
             data=data,

@@ -69,6 +69,8 @@ def build_sql_agent_workflow(
         validate_sql(generated.sql, dialect)
         return {
             "generated_query": generated.sql,
+            "explanation": generated.explanation,
+            "assumptions": list(generated.assumptions),
             "skill_paths": [str(match.skill.path) for match in selection.selected],
             "sql_skill_instructions": selection.instructions,
             "query_version": 1,
@@ -81,6 +83,7 @@ def build_sql_agent_workflow(
             state["session_id"],
             state["source_id"],
             state["generated_query"],
+            require_review=bool(state.get("assumptions")),
         )
         if status == "pending":
             from langgraph.types import interrupt
@@ -88,7 +91,11 @@ def build_sql_agent_workflow(
             from datapilot.validation.approval_manager import decide_execution_approval
 
             decision = interrupt(
-                {"query": state["generated_query"], "source_id": state["source_id"]}
+                {
+                    "query": state["generated_query"],
+                    "source_id": state["source_id"],
+                    "assumptions": state.get("assumptions", []),
+                }
             )
             if not isinstance(decision, bool):
                 raise ValueError("Approval decision must be a boolean")

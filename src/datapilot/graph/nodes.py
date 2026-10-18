@@ -10,6 +10,8 @@ class NodeUpdate(TypedDict, total=False):
     error: None
     result_reference: str
     generated_query: str
+    explanation: str
+    assumptions: list[str]
 
 
 def validate_request(state: AnalyticsState) -> NodeUpdate:
@@ -42,4 +44,6 @@ def prepare_analysis(state: AnalyticsState) -> NodeUpdate:
         "error": None,
         "result_reference": "",
         "generated_query": "",
+        "explanation": "",
+        "assumptions": [],
     }

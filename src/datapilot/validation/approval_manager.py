@@ -46,14 +46,20 @@ def initialize_approvals(database_path: Path) -> None:
 
 
 def _ensure_session(connection: sqlite3.Connection, session_id: str) -> None:
-    if connection.execute(
-        "SELECT 1 FROM sessions WHERE session_id = ?", (session_id,)
-    ).fetchone() is None:
+    if (
+        connection.execute("SELECT 1 FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+        is None
+    ):
         raise LookupError(f"Session not found: {session_id}")
 
 
 def request_execution_approval(
-    database_path: Path, session_id: str, source_id: str, query: str
+    database_path: Path,
+    session_id: str,
+    source_id: str,
+    query: str,
+    *,
+    require_review: bool = False,
 ) -> ApprovalDecision:
     session_id = _required_text(session_id, "session_id")
     source_id = _required_text(source_id, "source_id")
@@ -66,13 +72,20 @@ def request_execution_approval(
             (session_id, source_id, digest),
         ).fetchone()
         if existing is not None:
+            if require_review and existing["status"] == "approved":
+                connection.execute(
+                    "UPDATE execution_approvals SET status = 'pending', decided_at = NULL "
+                    "WHERE session_id = ? AND source_id = ? AND query_digest = ?",
+                    (session_id, source_id, digest),
+                )
+                return "pending"
             return existing["status"]
         authorized = connection.execute(
             "SELECT 1 FROM execution_approvals "
             "WHERE session_id = ? AND source_id = ? AND status = 'approved' LIMIT 1",
             (session_id, source_id),
         ).fetchone()
-        if authorized is not None:
+        if authorized is not None and not require_review:
             return "approved"
         connection.execute(
             "INSERT INTO execution_approvals "
@@ -109,9 +122,7 @@ def decide_execution_approval(
     return decision
 
 
-def can_execute_query(
-    database_path: Path, session_id: str, source_id: str, query: str
-) -> bool:
+def can_execute_query(database_path: Path, session_id: str, source_id: str, query: str) -> bool:
     session_id = _required_text(session_id, "session_id")
     source_id = _required_text(source_id, "source_id")
     digest = _query_digest(query)
@@ -124,8 +135,11 @@ def can_execute_query(
         ).fetchone()
         if row is not None:
             return row["status"] == "approved"
-        return connection.execute(
-            "SELECT 1 FROM execution_approvals "
-            "WHERE session_id = ? AND source_id = ? AND status = 'approved' LIMIT 1",
-            (session_id, source_id),
-        ).fetchone() is not None
+        return (
+            connection.execute(
+                "SELECT 1 FROM execution_approvals "
+                "WHERE session_id = ? AND source_id = ? AND status = 'approved' LIMIT 1",
+                (session_id, source_id),
+            ).fetchone()
+            is not None
+        )

@@ -28,7 +28,9 @@ class ChartArtifact:
 
 
 def _safe_session_id(session_id: str) -> str:
-    if not isinstance(session_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", session_id):
+    if not isinstance(session_id, str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", session_id
+    ):
         raise ChartArtifactError("Invalid session identifier")
     return session_id
 
@@ -67,7 +69,11 @@ def _render_content(chart: RenderedChart) -> tuple[bytes, str, str]:
 
         if not isinstance(chart.figure, Figure):
             raise ChartArtifactError("Expected a Plotly figure")
-        return chart.figure.to_html(full_html=True, include_plotlyjs=True).encode("utf-8"), ".html", "text/html"
+        return (
+            chart.figure.to_html(full_html=True, include_plotlyjs=True).encode("utf-8"),
+            ".html",
+            "text/html",
+        )
     if chart.library == "bokeh":
         from bokeh.embed import file_html
         from bokeh.models import Model
@@ -75,7 +81,11 @@ def _render_content(chart: RenderedChart) -> tuple[bytes, str, str]:
 
         if not isinstance(chart.figure, Model):
             raise ChartArtifactError("Expected a Bokeh model")
-        return file_html(chart.figure, INLINE, title="DataPilot Chart").encode("utf-8"), ".html", "text/html"
+        return (
+            file_html(chart.figure, INLINE, title="DataPilot Chart").encode("utf-8"),
+            ".html",
+            "text/html",
+        )
     raise ChartArtifactError("Unsupported chart library")
 
 
@@ -86,6 +96,7 @@ def save_chart_artifact(
     session_id: str,
     title: str,
     result_id: str | None = None,
+    plan: dict[str, Any] | None = None,
 ) -> ChartArtifact:
     if not isinstance(chart, RenderedChart):
         raise ChartArtifactError("A RenderedChart is required")
@@ -119,10 +130,13 @@ def save_chart_artifact(
         "media_type": media_type,
         "created_at": created_at,
         "artifact_file": file_path.name,
+        "plan": plan,
     }
     _atomic_write(file_path, content)
     try:
-        _atomic_write(metadata_path, json.dumps(metadata, indent=2, ensure_ascii=False).encode("utf-8"))
+        _atomic_write(
+            metadata_path, json.dumps(metadata, indent=2, ensure_ascii=False).encode("utf-8")
+        )
     except Exception:
         file_path.unlink(missing_ok=True)
         raise

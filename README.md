@@ -41,6 +41,10 @@ This is the starting screen: I create a new analysis from the sidebar or reopen 
 | Persistent sessions | Reopen results, restore workflow checkpoints, and reconstruct compacted conversation history. |
 | Visualizations | Generate Matplotlib/Seaborn PNG charts and Plotly/Bokeh interactive HTML charts. |
 | Reports | Export a result, its question, executed analysis, and associated PNG charts as a PDF. |
+| Multi-file joins | Combine two to eight CSV/XLSX files with explicit keys, relationship checks, unmatched-row diagnostics, and bounded output. |
+| Answer evidence | Inspect the executed calculation and filters, planning explanation, assumptions, source fingerprints, model, row counts, and truncation. |
+| Dashboards | Pin saved charts and KPI cards, apply shared result filters, reorder/remove cards, and explicitly refresh their analyses. |
+| Repeated-query learning | Reuse repeated successful execution examples within a session/source/model scope, with feedback, an opt-out, and a forget control. |
 
 ## Quick start
 
@@ -53,7 +57,7 @@ This is the starting screen: I create a new analysis from the sidebar or reopen 
 ### Install and run
 
 ```powershell
-git clone --branch main https://github.com/AbdullahPoet/DataPilot.git
+git clone --branch develop https://github.com/AbdullahPoet/DataPilot.git
 cd DataPilot
 uv sync --locked
 uv run --locked python app.py
@@ -84,6 +88,22 @@ Open the local URL printed by Streamlit.
 6. Explore the result, generate a chart, or export a PDF report.
 
 Approval covers subsequent validated, read-only analyses of the same source in that session. Changed file contents require fresh approval. A rejected request remains rejected.
+
+### Combine files, inspect evidence, and build a dashboard
+
+In a CSV or XLSX session, select **Combine multiple files**. Upload mixed CSV/XLSX files or enter local paths, choose a worksheet for each workbook, and give each source a unique alias. Files join in the displayed order using one key per pair. Choose a left or inner join and the expected key relationship. Review duplicate keys, unmatched rows, output counts, and the preview, then select **Save joined data source**. Columns are qualified as `orders.amount` or `customers.region`. Null keys never match; many-to-many relationships must be selected explicitly. Each input and intermediate join is limited to 1,000,000 rows. File contents, worksheets, aliases, and join choices form the source version and its approval boundary.
+
+Open **Answer evidence** below a saved result to inspect its question, executed SQL or file operations, model explanation, assumptions, source version, and returned row count. SQL evidence records a schema fingerprint; database rows remain live rather than a reproducible database snapshot. Plans with model-reported assumptions require review even after the source was approved. Reject incorrect assumptions and ask again, using **Definitions or clarification** to specify business meanings. The app cannot guarantee detection of every ambiguous question. Older results may have no detailed evidence.
+
+Use **Pin KPI to dashboard** to choose a numeric aggregation or a count of saved result rows. Create a chart, open **Saved charts**, and select **Pin chart to dashboard**. Cards persist in the session and support reordering and removal. Shared equality filters apply to columns common to all card results, comparing their displayed string values, with an explicit missing-value option. Filters act after the underlying analysis and aggregation; they do not change its SQL or file plan. Truncated inputs to cards are labeled.
+
+**Refresh dashboard analyses** reruns each distinct pinned question against the currently configured source and model, keeping existing validation and approval safeguards. Questions shared by several cards run once. A pending approval pauses the saved refresh queue, which can resume after an application restart. Rejecting approval or a failed analysis stops the queue and retains that question's previous cards. Earlier completed questions in the same refresh may already have updated their cards. Reconnect SQL sources before refreshing. **Cancel dashboard refresh** cancels queued work; any pending analytical approval must still be approved or rejected separately.
+
+### Learning from repeated queries
+
+Learning is enabled by default per session. After two distinct, successful, non-truncated executions of the same question and exact SQL/file operations, the example becomes eligible as bounded context for that repeated question. Only whitespace is normalized. Examples are isolated by session, source version, schema/profile, provider, model identifier, and endpoint. Each request still generates and validates a plan, applies approval rules, and executes against current data.
+
+This is local example retrieval, not model-weight training or automatic promotion into verified skills. Execution success does not establish analytical correctness. Mark an analysis **Incorrect** to exclude its example, or **Useful** to update its feedback. **Forget learned examples** removes the session's examples without deleting results or allowing checkpoint replay to relearn old results. Disable learning to stop both recording and reuse. Model-generated Python is never executed. With a cloud model, eligible examples become part of the context sent to that selected provider.
 
 ## Configuration
 
@@ -195,6 +215,8 @@ SQL references live in `skills/easy`, `skills/mid`, `skills/hard`, and `skills/d
 ## Verification
 
 I keep offline regression checks separate from live service checks. Fixture-based model tests establish integration behavior; they do not establish a real model's capabilities.
+
+The October 18, 2026 `develop` feature regression reports **156 passed, 15 skipped**. Ruff, installed-package compatibility, lockfile validation, packaged-module imports, wheel/source builds, and the application health check pass. The skips require live services or credentials; Ollama was unreachable during this run. See the [workbench feature delivery](docs/WORKBENCH_FEATURES.md) for joins, evidence, dashboards, learning, and their boundaries. The table below preserves the earlier live verification evidence.
 
 The results below reflect verification on October 17, 2026.
 

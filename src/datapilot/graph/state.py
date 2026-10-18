@@ -38,6 +38,11 @@ class AnalyticsState(TypedDict):
     error: NotRequired[WorkflowError | None]
     analysis_context: NotRequired[str]
     documentation_status: NotRequired[str]
+    source_evidence: NotRequired[dict[str, object]]
+    explanation: NotRequired[str]
+    assumptions: NotRequired[list[str]]
+    learning_example_used: NotRequired[bool]
+    learning_scope: NotRequired[str]
 
 
 def create_analytics_state(

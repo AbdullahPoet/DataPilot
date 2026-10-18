@@ -14,14 +14,23 @@ from datapilot.graph.analytics_orchestrator import build_analytics_workflow
 from datapilot.graph.memory_orchestrator import prepare_memory_context
 from datapilot.graph.state import create_analytics_state
 from datapilot.ingestion.file_loader import load_data_file
+from datapilot.ingestion.joined_source import load_joined_source
 from datapilot.knowledge.file_knowledge_cache import load_file_knowledge
 from datapilot.knowledge.schema_cache import load_schema_knowledge
 from datapilot.memory.checkpoint_manager import checkpoint_config, open_checkpoint_saver
 from datapilot.memory.memory_compactor import MemoryTurn
 from datapilot.models.model_manager import ChatMessage, invoke_model
+from datapilot.persistence.analysis_evidence import initialize_evidence, save_evidence
+from datapilot.persistence.dashboard_repository import initialize_dashboards
 from datapilot.persistence.result_repository import initialize_results, load_result, save_result
 from datapilot.persistence.session_repository import get_session, initialize_sessions, touch_session
 from datapilot.persistence.sqlite_manager import initialize_database, open_database
+from datapilot.skills_engine.query_learning import (
+    initialize_learning,
+    learned_context,
+    learning_scope,
+    record_example,
+)
 from datapilot.skills_engine.skill_orchestrator import orchestrate_skills
 from datapilot.tools.search_orchestrator import search_documentation
 from datapilot.validation.approval_manager import initialize_approvals
@@ -32,6 +41,9 @@ def initialize_application(database_path: Path) -> None:
     initialize_sessions(database_path)
     initialize_approvals(database_path)
     initialize_results(database_path)
+    initialize_evidence(database_path)
+    initialize_learning(database_path)
+    initialize_dashboards(database_path)
     with open_database(database_path) as connection:
         connection.execute(
             "CREATE TABLE IF NOT EXISTS conversation_memory ("
@@ -74,6 +86,7 @@ class AnalyticsApplication:
         self.connection_url = connection_url
         self.source_type = self.configuration.get("source_type")
         self.frame: pd.DataFrame | None = None
+        self.source_evidence: dict[str, Any] = {}
         if self.source_type == "sql":
             if not connection_url:
                 raise ValueError("Reconnect to the database before running analysis")
@@ -83,21 +96,68 @@ class AnalyticsApplication:
                 url = url.set(database=str(Path(url.database).expanduser().resolve()))
             engine = create_engine(url)
             try:
-                self.knowledge = load_schema_knowledge(engine, self.root / "knowledge")
+                self.knowledge = load_schema_knowledge(
+                    engine, self.root / "knowledge", refresh=True
+                )
             finally:
                 engine.dispose()
             identity = url.render_as_string(hide_password=True)
+            self.source_evidence = {
+                "dialect": self.dialect,
+                "schema_sha256": hashlib.sha256(self.knowledge.encode()).hexdigest(),
+                "version_note": "Schema fingerprint; database rows are live, not a snapshot",
+            }
+            identity += self.source_evidence["schema_sha256"]
         elif self.source_type in {"csv", "xlsx"}:
-            path = Path(self.configuration["file_path"])
-            sheet = self.configuration.get("sheet_name")
-            self.frame = load_data_file(path, sheet_name=sheet)
-            self.knowledge = load_file_knowledge(
-                path, self.root / "knowledge" / "files", sheet_name=sheet
-            )
-            identity = hashlib.sha256(path.read_bytes()).hexdigest() + str(sheet)
+            if self.configuration.get("files"):
+                joined = load_joined_source(self.configuration)
+                self.frame = joined.dataframe
+                self.knowledge = joined.knowledge
+                self.source_evidence = joined.evidence
+                identity = joined.source_id
+            else:
+                self._load_single_file()
+                identity = self.source_evidence["files"][0]["sha256"] + str(
+                    self.configuration.get("sheet_name")
+                )
         else:
             raise ValueError("Configure a SQL, CSV, or XLSX source first")
         self.source_id = hashlib.sha256(identity.encode()).hexdigest()
+        self.learning_scope = learning_scope(self.source_id, self.knowledge, self.model)
+
+    def _load_single_file(self) -> None:
+        path = Path(self.configuration["file_path"])
+        sheet = self.configuration.get("sheet_name")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.frame = load_data_file(path, sheet_name=sheet)
+        self.knowledge = load_file_knowledge(
+            path, self.root / "knowledge" / "files", sheet_name=sheet
+        )
+        if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise ValueError("Source changed while loading; reload the file")
+        self.source_evidence = {
+            "files": [
+                {
+                    "file_name": path.name,
+                    "sha256": digest,
+                    "sheet_name": sheet,
+                    "rows": len(self.frame),
+                }
+            ],
+            "input_rows": len(self.frame),
+        }
+
+    def _check_files(self) -> None:
+        if self.source_type == "sql":
+            return
+        paths = (
+            [Path(source["path"]) for source in self.configuration["files"]]
+            if self.configuration.get("files")
+            else [Path(self.configuration["file_path"])]
+        )
+        for path, source in zip(paths, self.source_evidence["files"], strict=True):
+            if hashlib.sha256(path.read_bytes()).hexdigest() != source["sha256"]:
+                raise ValueError("Source changed; reload before running or approving analysis")
 
     def _memory(self) -> dict[str, Any]:
         with open_database(self.database) as connection:
@@ -184,10 +244,14 @@ class AnalyticsApplication:
                 source_context=self.knowledge,
             )
             context += "\n" + selection.instructions
+        example = learned_context(self.database, self.session_id, self.learning_scope, question)
+        if example:
+            context += "\n" + example
         return context, search.status
 
     def _workflow(self) -> Any:
         def store(session_id: str, result: object) -> str:
+            self._check_files()
             return save_result(
                 result,
                 database_path=self.database,
@@ -237,6 +301,8 @@ class AnalyticsApplication:
         }
 
     def run(self, question: str | None = None, *, decision: bool | None = None) -> dict[str, Any]:
+        if decision is not False:
+            self._check_files()
         config = checkpoint_config(self.session_id)
         with open_checkpoint_saver(self.root / "storage" / "checkpoints.db") as saver:
             workflow = self._workflow().compile(checkpointer=saver)
@@ -258,6 +324,13 @@ class AnalyticsApplication:
                     raise ValueError(
                         "Restore the original source and model before resuming approval"
                     )
+                if (
+                    decision
+                    and values.get("learning_scope", self.learning_scope) != self.learning_scope
+                ):
+                    raise ValueError(
+                        "Restore the original source and model endpoint before resuming approval"
+                    )
                 result = workflow.invoke(Command(resume=decision), config)
             else:
                 if snapshot.interrupts:
@@ -273,6 +346,11 @@ class AnalyticsApplication:
                     question,
                 )
                 state["analysis_context"], state["documentation_status"] = self._context(question)
+                state["source_evidence"] = self.source_evidence
+                state["learning_scope"] = self.learning_scope
+                state["learning_example_used"] = bool(
+                    learned_context(self.database, self.session_id, self.learning_scope, question)
+                )
                 result = workflow.invoke(state, config)
         touch_session(self.database, self.session_id)
         self._record_result(result)
@@ -296,6 +374,38 @@ class AnalyticsApplication:
                         result.get("generated_query")
                         or json.dumps(result.get("pandas_operations", [])),
                     ),
+                )
+            save_evidence(
+                self.database,
+                self.session_id,
+                reference,
+                {
+                    "question": result["user_query"],
+                    "executed_analysis": result.get("generated_query")
+                    or result.get("pandas_operations", []),
+                    "explanation": result.get("explanation")
+                    or result.get("pandas_plan", {}).get("explanation", ""),
+                    "assumptions": result.get("assumptions")
+                    or result.get("pandas_plan", {}).get("assumptions", []),
+                    "source": result.get("source_evidence", {}),
+                    "provider": result["model_provider"],
+                    "model": result["model_name"],
+                    "attempts": result.get("attempt_count", 1),
+                    "learning_example_used": result.get("learning_example_used", False),
+                },
+            )
+            if result.get("learning_scope") == self.learning_scope:
+                record_example(
+                    self.database,
+                    self.session_id,
+                    self.learning_scope,
+                    reference,
+                    result["user_query"],
+                    {
+                        "question": result["user_query"],
+                        "analysis": result.get("generated_query")
+                        or result.get("pandas_operations", []),
+                    },
                 )
             if reference not in memory["references"]:
                 data = load_result(

@@ -184,3 +184,36 @@ def test_application_rejects_changed_source(
     rejected = restored.run(decision=False)
     assert rejected["approval_status"] == "rejected"
     assert not list_results(restored.database, session_id, restored.artifacts)
+
+
+def test_sql_evidence_learning_and_schema_versions(
+    tmp_path: Path,
+    source: str,
+    model_endpoint: dict[str, str | int],
+) -> None:
+    import sqlite3
+
+    from datapilot.persistence.analysis_evidence import load_evidence
+    from datapilot.skills_engine.query_learning import learned_context
+
+    database = tmp_path / "storage" / "app.db"
+    initialize_application(database)
+    shutil.copytree("skills", tmp_path / "skills")
+    session_id = create_session(database, "SQL learning", {"source_type": "sql"})
+    app = AnalyticsApplication(tmp_path, session_id, model_endpoint, connection_url=source)
+    app.run("Total sales")
+    first = app.run(decision=True)
+    evidence = load_evidence(database, session_id, first["result_reference"])
+    assert evidence["executed_analysis"] == "SELECT SUM(amount) AS total FROM sales"
+    assert evidence["explanation"] == "Total sales"
+    assert evidence["source"]["schema_sha256"]
+    assert "live" in evidence["source"]["version_note"]
+    app.run("Total sales")
+    assert learned_context(database, session_id, app.learning_scope, "Total sales")
+    assert "Repeated successful execution example" in app._context("Total sales")[0]
+    with sqlite3.connect(source.removeprefix("sqlite:///")) as connection:
+        connection.execute("ALTER TABLE sales ADD COLUMN discount INTEGER")
+    restored = AnalyticsApplication(tmp_path, session_id, model_endpoint, connection_url=source)
+    assert restored.source_id != app.source_id
+    assert not learned_context(database, session_id, restored.learning_scope, "Total sales")
+    assert restored.run("Total sales")["__interrupt__"]

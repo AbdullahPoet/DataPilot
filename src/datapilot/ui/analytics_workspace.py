@@ -1,4 +1,5 @@
 import json
+from dataclasses import asdict
 from pathlib import Path
 
 import pandas as pd
@@ -6,10 +7,19 @@ import streamlit as st
 
 from datapilot.agents.visualization_agent import VisualizationPlan, plan_visualization
 from datapilot.application import AnalyticsApplication
+from datapilot.persistence.analysis_evidence import load_evidence
+from datapilot.persistence.dashboard_repository import advance_refresh
 from datapilot.persistence.result_repository import list_results, load_result
 from datapilot.persistence.sqlite_manager import open_database
 from datapilot.reports.pdf_report import ReportData, generate_pdf_report
+from datapilot.skills_engine.query_learning import (
+    forget_examples,
+    learning_enabled,
+    set_feedback,
+    set_learning,
+)
 from datapilot.ui.chart_presenter import present_saved_chart
+from datapilot.ui.dashboard_workspace import pin_chart, render_dashboard, render_pin_controls
 from datapilot.ui.model_selector import render_model_selector
 from datapilot.ui.report_presenter import list_saved_reports, present_saved_report
 from datapilot.visualization.chart_artifacts import ChartArtifact, save_chart_artifact
@@ -17,6 +27,23 @@ from datapilot.visualization.chart_renderer import render_chart
 
 
 def render_analytics(root: Path, session_id: str, configuration: dict[str, object]) -> None:
+    application = None
+    database = root / "storage" / "app.db"
+    with st.expander("Learning from repeated queries"):
+        enabled = learning_enabled(database, session_id)
+        selected_learning = st.checkbox(
+            "Learn from successful repeated queries", value=enabled, key=f"learning_{session_id}"
+        )
+        if selected_learning != enabled:
+            set_learning(database, session_id, selected_learning)
+        st.caption(
+            "After two successful executions of the same question and plan, DataPilot can use "
+            "it as an example for this source and model. Execution success does not prove "
+            "analytical correctness. Validation and approval still apply."
+        )
+        if st.button("Forget learned examples", key=f"forget_learning_{session_id}"):
+            forget_examples(database, session_id)
+            st.success("Learned examples cleared for this session.")
     model = configuration.get("model_configuration")
     if isinstance(model, dict):
         st.caption(f"Selected model: {model['provider']} / {model['model']}")
@@ -41,9 +68,10 @@ def render_analytics(root: Path, session_id: str, configuration: dict[str, objec
                 model,
                 connection_url=st.session_state.get(f"connection_{session_id}"),
             )
+            advance_refresh(application)
             snapshot = application.snapshot()
             if snapshot["interrupts"]:
-                st.subheader("Review first execution")
+                st.subheader("Review analysis")
                 st.write(
                     "Approval allows subsequent validated read-only analyses for this source in this session."
                 )
@@ -51,6 +79,20 @@ def render_analytics(root: Path, session_id: str, configuration: dict[str, objec
                     snapshot["values"].get("generated_query")
                     or json.dumps(snapshot["values"].get("pandas_operations"), indent=2)
                 )
+                values = snapshot["values"]
+                assumptions = values.get("assumptions") or values.get("pandas_plan", {}).get(
+                    "assumptions", []
+                )
+                explanation = values.get("explanation") or values.get("pandas_plan", {}).get(
+                    "explanation", ""
+                )
+                if explanation:
+                    st.write(explanation)
+                if assumptions:
+                    st.warning(
+                        "This plan makes assumptions. Reject it and clarify your question if any are incorrect."
+                    )
+                    st.write(assumptions)
                 approve, reject = st.columns(2)
                 decision = None
                 if approve.button("Approve execution", key=f"approve_{session_id}"):
@@ -61,10 +103,15 @@ def render_analytics(root: Path, session_id: str, configuration: dict[str, objec
                     application.run(decision=decision)
                     st.rerun()
             else:
+                clarification = st.text_input(
+                    "Definitions or clarification (optional)", key=f"clarification_{session_id}"
+                )
                 question = st.chat_input(
                     "Ask a question about this data", key=f"question_{session_id}"
                 )
                 if question:
+                    if clarification.strip():
+                        question += "\nUser clarification: " + clarification.strip()
                     with st.spinner("Preparing analysis"):
                         application.run(question)
                     st.rerun()
@@ -84,6 +131,8 @@ def render_analytics(root: Path, session_id: str, configuration: dict[str, objec
             PermissionError,
         ) as error:
             st.error(str(error))
+            application = None
+    render_dashboard(root, session_id, application)
     render_saved_results(root, session_id, model)
 
 
@@ -128,6 +177,8 @@ def render_saved_results(root: Path, session_id: str, model: dict[str, object] |
                     "SELECT question, executed_query FROM analysis_details WHERE result_id = ? AND session_id = ?",
                     (selected.result_id, session_id),
                 ).fetchone()
+            render_answer_evidence(database, session_id, selected.result_id)
+            render_pin_controls(root, session_id, selected.result_id, frame)
             render_chart_controls(
                 root,
                 session_id,
@@ -241,6 +292,7 @@ def render_chart_controls(
                 session_id=session_id,
                 title=plan.title,
                 result_id=result_id,
+                plan=asdict(plan),
             )
             if chart.library in {"matplotlib", "seaborn"}:
                 chart.figure.clear()
@@ -273,3 +325,56 @@ def render_saved_charts(root: Path, session_id: str) -> None:
             metadata["created_at"],
         )
         present_saved_chart(artifact, artifacts_directory=root / "sessions")
+        if (
+            metadata.get("result_id")
+            and metadata.get("plan")
+            and st.button(
+                "Pin chart to dashboard",
+                key=f"pin_chart_{selected.stem}",
+            )
+        ):
+            pin_chart(
+                root, session_id, metadata["result_id"], VisualizationPlan(**metadata["plan"])
+            )
+            st.rerun()
+
+
+def render_answer_evidence(database: Path, session_id: str, result_id: str) -> None:
+    with st.expander("Answer evidence"):
+        evidence = load_evidence(database, session_id, result_id)
+        if evidence is None:
+            st.info("Detailed evidence was not recorded for this older result.")
+            return
+        st.write(evidence["question"])
+        st.caption("Model explanation; use the executed analysis below to check the calculation.")
+        st.write(evidence["explanation"] or "No explanation recorded.")
+        if evidence["assumptions"]:
+            st.warning("Assumptions used in planning")
+            st.write(evidence["assumptions"])
+        st.code(
+            evidence["executed_analysis"]
+            if isinstance(evidence["executed_analysis"], str)
+            else json.dumps(evidence["executed_analysis"], indent=2)
+        )
+        st.write(f"Returned rows: {evidence['row_count']} · Attempts: {evidence['attempts']}")
+        st.write(f"Model: {evidence['provider']} / {evidence['model']}")
+        st.write(f"Source version: {evidence['source_id']}")
+        st.json(evidence["source"])
+        if evidence["truncated"]:
+            st.warning("Returned rows were truncated; displayed totals may be incomplete.")
+        if evidence["learning_example_used"]:
+            st.caption("A repeated-query example was available for this analysis.")
+        with open_database(database) as connection:
+            example = connection.execute(
+                "SELECT useful FROM query_examples WHERE session_id = ? AND result_id = ?",
+                (session_id, result_id),
+            ).fetchone()
+        if example is not None:
+            if st.button("Useful analysis", key=f"useful_{result_id}"):
+                set_feedback(database, session_id, result_id, True)
+                st.success("Positive feedback saved.")
+            if st.button(
+                "Incorrect analysis — exclude from learning", key=f"incorrect_{result_id}"
+            ):
+                set_feedback(database, session_id, result_id, False)
+                st.success("This example is excluded from future learning.")

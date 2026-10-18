@@ -71,7 +71,9 @@ def build_pandas_agent_workflow(
             file_profile=file_profile,
             file_type=state["source_type"],
             model_configuration=model_configuration,
-            skill_instructions="\n\n".join(filter(None, [skill_instructions, state.get("analysis_context", "")])),
+            skill_instructions="\n\n".join(
+                filter(None, [skill_instructions, state.get("analysis_context", "")])
+            ),
         )
         validated = validate_pandas_plan(generated, frame.columns)
         return {
@@ -131,18 +133,24 @@ def build_pandas_agent_workflow(
             state["session_id"],
             state["source_id"],
             state["user_query"],
+            require_review=bool(state["pandas_plan"].get("assumptions")),
         )
         if status == "pending":
             from langgraph.types import interrupt
 
             from datapilot.validation.approval_manager import decide_execution_approval
 
-            decision = interrupt({"query": state["user_query"], "operations": state["pandas_operations"]})
+            decision = interrupt(
+                {"query": state["user_query"], "operations": state["pandas_operations"]}
+            )
             if not isinstance(decision, bool):
                 raise ValueError("Approval decision must be a boolean")
             status = decide_execution_approval(
-                approval_database_path, state["session_id"], state["source_id"],
-                state["user_query"], decision,
+                approval_database_path,
+                state["session_id"],
+                state["source_id"],
+                state["user_query"],
+                decision,
             )
         return {"approval_status": status}
 
